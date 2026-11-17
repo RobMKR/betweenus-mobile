@@ -4,7 +4,7 @@ Expo Router + React Native + TypeScript app for iOS, Android and a web preview. 
 
 ## Local pilot
 
-Use Node 22+. Start the backend with its local Postgres setup first.
+Use Node 22+. Start the backend in its explicitly enabled local-demo mode first (see its README). The demo binds to loopback and uses ephemeral memory; no Postgres is required for this mode.
 
 ```sh
 npm ci
@@ -12,9 +12,9 @@ cp .env.example .env
 npm run web
 ```
 
-Use `npm run ios` / `npm run android` for an installed simulator or scan the Expo QR code with Expo Go. Physical devices need `EXPO_PUBLIC_API_URL` set to your computer's LAN address and reachable backend port 3001. Set backend CORS to the web preview origin (default localhost:8081). Restart Expo after changing environment variables.
+Use `npm run ios` / `npm run android` for an installed simulator or scan the Expo QR code with Expo Go. The loopback-only demo supports the web preview and simulators with host-loopback access; physical devices require a separately configured, authenticated API reachable over HTTPS. Do not expose the demo API on a LAN or public network. Set backend CORS to the web preview origin (default localhost:8081). Restart Expo after changing environment variables.
 
-The explicitly labeled local demo selector uses `demo-lender` (Alex, alex@example.com) and `demo-borrower` (John, john@example.com). The backend must enable its demo authentication mode. Create a debt as Alex for john@example.com, switch to John, open it and confirm or dispute with a reason, then switch back to see the shared result. Seeded entries persist in the backend database. Pull down to refresh.
+The explicitly labeled local demo selector uses `demo-lender` (Alex, alex@example.com) and `demo-borrower` (John, john@example.com). The backend must enable its demo authentication mode. Create a debt as Alex for john@example.com, switch to John, open it and confirm or dispute with a reason, then switch back to see the shared result. Demo records live in memory and reset whenever the backend restarts. Pull down to refresh.
 
 ## Included behavior
 
@@ -38,5 +38,7 @@ Do not enable demo auth on a public production backend. Client build flags are n
 npm run typecheck
 npm run export
 ```
+
+Production export refuses an explicitly enabled demo flag. For the local browser smoke, run `npm run export:demo`, serve `dist` on localhost:8081, start the local-demo API, and run `npm run test:smoke` (requires Chromium at `/usr/bin/chromium`, or set `CHROMIUM_PATH`). The smoke creates two ephemeral demo debts, confirms one, disputes the other, and saves a screenshot to `/tmp/betweenus-mobile-overview.png`.
 
 CI repeats type checking and a production web bundle. A web bundle does not verify iOS/Android device behavior. Exercise the two-person flow above on both device platforms before a pilot release.

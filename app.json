@@ -1,1 +1,17 @@
-{"expo":{"name":"BetweenUs","slug":"betweenus","scheme":"betweenus","version":"1.0.0","orientation":"portrait","userInterfaceStyle":"light","ios":{"supportsTablet":true,"bundleIdentifier":"com.betweenus.mobile"},"android":{"package":"com.betweenus.mobile"},"web":{"bundler":"metro","output":"static"},"plugins":["expo-router"]}}
+{
+  "expo": {
+    "name": "BetweenUs",
+    "slug": "betweenus",
+    "scheme": "betweenus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.betweenus.mobile"
+    },
+    "android": { "package": "com.betweenus.mobile" },
+    "web": { "bundler": "metro", "output": "static" },
+    "plugins": ["expo-router"]
+  }
+}

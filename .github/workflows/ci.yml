@@ -14,4 +14,4 @@ jobs:
       - run: npm run export
         env:
           EXPO_PUBLIC_API_URL: http://localhost:3001
-          EXPO_PUBLIC_DEMO_MODE: 'false'
+          EXPO_PUBLIC_DEMO_MODE: "false"
