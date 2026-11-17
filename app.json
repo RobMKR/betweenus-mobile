@@ -10,8 +10,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.betweenus.mobile"
     },
-    "android": { "package": "com.betweenus.mobile" },
-    "web": { "bundler": "metro", "output": "static" },
-    "plugins": ["expo-router"]
+    "android": {
+      "package": "com.betweenus.mobile"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "owner": "RobMKR"
   }
 }

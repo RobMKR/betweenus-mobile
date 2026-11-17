@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { amountToMinor, Balance, Debt, DEMO, money, request } from "../src/api";
+import AuthGate from "../src/AuthGate";
 const colors = {
   ink: "#203b35",
   muted: "#71817a",
@@ -28,9 +29,33 @@ const labels = {
 };
 type Filter = "all" | "pending" | "accepted" | "disputed";
 export default function Home() {
+  if (DEMO) return <DebtHome />;
+  return (
+    <AuthGate>
+      {(token, signOut, identity) => (
+        <DebtHome key={identity} accessToken={token} signOut={signOut} />
+      )}
+    </AuthGate>
+  );
+}
+function DebtHome({
+  accessToken = "",
+  signOut,
+}: {
+  accessToken?: string;
+  signOut?: () => Promise<void>;
+}) {
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
   const [persona, setPersona] = useState<"lender" | "borrower">("lender");
-  const [tokenInput, setTokenInput] = useState("");
-  const token = DEMO ? `demo-${persona}` : tokenInput;
+  const token = DEMO ? `demo-${persona}` : accessToken;
+  const requestIdentity = useRef(token);
+  requestIdentity.current = token;
   const [me, setMe] = useState<{ id: string; email: string } | null>(null);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
@@ -46,6 +71,7 @@ export default function Home() {
   const [reason, setReason] = useState("");
   async function refresh() {
     if (!token) return;
+    const operationToken = token;
     setBusy(true);
     setError("");
     try {
@@ -54,14 +80,17 @@ export default function Home() {
         request<{ debts: Debt[] }>("/debts", token),
         request<{ balances: Balance[] }>("/balances", token),
       ]);
+      if (!active.current || requestIdentity.current !== operationToken) return;
       setMe(user);
       setDebts(list.debts);
       setBalances(total.balances);
       setLoaded(true);
     } catch (e) {
-      setError((e as Error).message);
+      if (active.current && requestIdentity.current === operationToken)
+        setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (active.current && requestIdentity.current === operationToken)
+        setBusy(false);
     }
   }
   useEffect(() => {
@@ -70,8 +99,14 @@ export default function Home() {
     setBalances([]);
     setLoaded(false);
     setDetail(null);
-    if (DEMO) void refresh();
-  }, [persona]);
+    setCreating(false);
+    setEmail("");
+    setAmount("");
+    setNote("");
+    setReason("");
+    setError("");
+    void refresh();
+  }, [token]);
   async function create() {
     const minor = amountToMinor(amount);
     if (
@@ -88,6 +123,7 @@ export default function Home() {
       setError("Choose someone other than yourself.");
       return;
     }
+    const operationToken = token;
     setBusy(true);
     setError("");
     try {
@@ -97,15 +133,18 @@ export default function Home() {
         currency: "AED",
         description: note.trim(),
       });
+      if (!active.current || requestIdentity.current !== operationToken) return;
       setCreating(false);
       setEmail("");
       setAmount("");
       setNote("");
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      if (active.current && requestIdentity.current === operationToken)
+        setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (active.current && requestIdentity.current === operationToken)
+        setBusy(false);
     }
   }
   async function respond(action: "accept" | "dispute") {
@@ -114,6 +153,7 @@ export default function Home() {
       setError("Add a reason so you can resolve this together.");
       return;
     }
+    const operationToken = token;
     setBusy(true);
     setError("");
     try {
@@ -122,13 +162,16 @@ export default function Home() {
         token,
         action === "dispute" ? { reason: reason.trim() } : {},
       );
+      if (!active.current || requestIdentity.current !== operationToken) return;
       setDetail(result.debt);
       setReason("");
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      if (active.current && requestIdentity.current === operationToken)
+        setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (active.current && requestIdentity.current === operationToken)
+        setBusy(false);
     }
   }
   const total = balances.find((b) => b.currency === "AED");
@@ -195,22 +238,16 @@ export default function Home() {
             </View>
           </View>
         )}
-        {!DEMO && !me && (
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Developer token connection</Text>
-            <Text style={s.body}>
-              Enter a valid Supabase access token. Email sign-in is not included
-              in this pilot client.
+        {!DEMO && (
+          <View style={s.rowBetween}>
+            <Text style={s.small}>
+              {me?.email || "Connecting your account…"}
             </Text>
-            <TextInput
-              accessibilityLabel="Access token"
-              secureTextEntry
-              value={tokenInput}
-              onChangeText={setTokenInput}
-              placeholder="Access token"
-              style={s.input}
-            />
-            {button("Connect", refresh)}
+            <Pressable onPress={() => void signOut?.()}>
+              <Text style={{ color: colors.green, fontWeight: "600" }}>
+                Sign out
+              </Text>
+            </Pressable>
           </View>
         )}
         <View style={s.heading}>
