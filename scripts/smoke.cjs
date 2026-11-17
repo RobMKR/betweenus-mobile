@@ -26,8 +26,12 @@ const assert = require("node:assert/strict");
   await page.getByText("Confirm debt", { exact: true }).click();
   await page.getByText("Confirmed by borrower", { exact: true }).waitFor();
   await page.getByLabel("Close", { exact: true }).click();
+  await page
+    .getByText("Debt details", { exact: true })
+    .waitFor({ state: "hidden" });
   await page.getByText("Alex · lender", { exact: true }).click();
   await page.getByText(description, { exact: true }).waitFor();
+  await page.waitForTimeout(400);
   await page.screenshot({
     path: "/tmp/betweenus-mobile-overview.png",
     fullPage: true,
