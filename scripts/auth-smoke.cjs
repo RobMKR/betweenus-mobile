@@ -49,6 +49,29 @@ const session = (email) => ({
   let heldRoute = null;
   let holdDebts = false;
   let failLogout = false;
+  let accepted = false,
+    disputed = false;
+  const pending = (kind) => ({
+    id: `pending-${kind}`,
+    lenderId: kind === "accept" ? "carol-id" : "sam-id",
+    borrowerId: userA,
+    lenderEmail: kind === "accept" ? "carol@example.com" : "sam@example.com",
+    borrowerEmail: "alice@example.com",
+    amountMinor: kind === "accept" ? 1250 : 700,
+    currency: "AED",
+    description:
+      kind === "accept" ? "Confirm this lunch" : "Question this taxi",
+    status:
+      kind === "accept"
+        ? accepted
+          ? "accepted"
+          : "pending"
+        : disputed
+          ? "disputed"
+          : "pending",
+    createdAt: "2026-01-02",
+    history: [],
+  });
   await page.route(`${authOrigin}/auth/v1/**`, async (route) => {
     const req = route.request(),
       url = req.url(),
@@ -92,6 +115,18 @@ const session = (email) => ({
         contentType: "application/json",
         body: JSON.stringify(data),
       });
+    if (url.endsWith("/pending-accept/accept")) {
+      accepted = true;
+      return json({ debt: pending("accept") });
+    }
+    if (url.endsWith("/pending-dispute/dispute")) {
+      assert.equal(
+        route.request().postDataJSON().reason,
+        "We already split this.",
+      );
+      disputed = true;
+      return json({ debt: pending("dispute") });
+    }
     if (url.endsWith("/me"))
       return json({
         id: alice ? userA : userB,
@@ -103,8 +138,8 @@ const session = (email) => ({
           {
             currency: "AED",
             receivableMinor: alice ? 50000 : 0,
-            payableMinor: 0,
-            netMinor: alice ? 50000 : 0,
+            payableMinor: alice && accepted ? 1250 : 0,
+            netMinor: alice ? 50000 - (accepted ? 1250 : 0) : 0,
           },
         ],
       });
@@ -129,6 +164,8 @@ const session = (email) => ({
                 createdAt: "2026-01-01",
                 history: [],
               },
+              pending("accept"),
+              pending("dispute"),
             ]
           : [],
       });
@@ -150,6 +187,93 @@ const session = (email) => ({
   await page.getByText("Verify & sign in", { exact: true }).click();
   await page.getByText("Alice private debt", { exact: true }).waitFor();
   assert.equal(otpRequests, 1);
+  const tab = async (name) => {
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    await page.getByRole("tab", { name, exact: true }).click();
+    await expect(page.getByRole("tab", { name, exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  };
+  const button = (name) => page.getByRole("button", { name, exact: true });
+  await tab("People");
+  await button("Open person carol@example.com").click();
+  await button("Open debt: Confirm this lunch").click();
+  await button("Confirm debt").waitFor();
+  await tab("Home");
+  await button("Open debt: Confirm this lunch").click();
+  await button("Confirm debt").click();
+  await expect(page.getByText("Confirmed", { exact: true })).toBeVisible();
+  await tab("People");
+  assert.equal(
+    await button("Confirm debt").count(),
+    0,
+    "retained other-tab detail uses current accepted record",
+  );
+  await button("‹ Back").click();
+  await button("‹ All people").click();
+  await button("Open person sam@example.com").click();
+  await button("Open debt: Question this taxi").click();
+  await page
+    .getByLabel("Dispute reason", { exact: true })
+    .fill("We already split this.");
+  await button("Flag for resolution").click();
+  await page.getByText("Needs resolution", { exact: true }).waitFor();
+  await tab("Home");
+  await button("‹ Back").click();
+  await button("All requests").click();
+  await page.getByText("All requests", { exact: true }).waitFor();
+  assert.equal(
+    await page.getByText("Debt details", { exact: true }).count(),
+    0,
+    "explicit all-requests shortcut clears stale person detail",
+  );
+  await button("Needs resolution").click();
+  await button("Open debt: Question this taxi").waitFor();
+  await button("All debts").click();
+  await tab("Vaults");
+  await page
+    .getByText("Account vaults are not available yet", { exact: true })
+    .waitFor();
+  await button("Choose device-only mode").click();
+  await button("Use offline — free").click();
+  await page
+    .getByText("Good times. Clear balances.", { exact: true })
+    .waitFor();
+  assert.equal(
+    await page.getByText("Alice private debt", { exact: true }).count(),
+    0,
+    "account records are not copied into offline mode",
+  );
+  await tab("Settings");
+  await button("Switch mode").click();
+  await button("Use account mode").click();
+  await page.getByText("Alice private debt", { exact: true }).waitFor();
+  assert.equal(
+    otpRequests,
+    1,
+    "returning from offline restores account without resending email",
+  );
+  await tab("Settings");
+  await page.getByText("alice@example.com", { exact: true }).waitFor();
+  await page.screenshot({
+    path: "/tmp/betweenus-tabs-account-settings.png",
+    fullPage: false,
+  });
+  await tab("Home");
+  for (const width of [320, 430]) {
+    await page.setViewportSize({ width, height: 932 });
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    await page.screenshot({
+      path: `/tmp/betweenus-tabs-account-home-${width}.png`,
+      fullPage: false,
+    });
+  }
+
   await page.reload();
   await page.getByText("Alice private debt", { exact: true }).waitFor();
   assert.equal(
@@ -173,6 +297,7 @@ const session = (email) => ({
 
   // /me remains gated by the held aggregate request, but sign-out stays available.
   failLogout = true;
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
   await page.getByText("Sign out", { exact: true }).click();
   await page.getByLabel("Email address", { exact: true }).waitFor();
   await page.waitForFunction(
@@ -197,7 +322,12 @@ const session = (email) => ({
   await page.getByText("Email me a code", { exact: true }).click();
   await page.getByLabel("Email code", { exact: true }).fill("123456");
   await page.getByText("Verify & sign in", { exact: true }).click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
   await page.getByText("bob@example.com", { exact: true }).waitFor();
+  await page.screenshot({
+    path: "/tmp/betweenus-tabs-account-bob.png",
+    fullPage: false,
+  });
   assert.ok(heldRoute, "old account request was held");
   await heldRoute.fulfill({
     status: 200,
@@ -221,6 +351,7 @@ const session = (email) => ({
     }),
   });
   await page.waitForTimeout(250);
+  await page.getByRole("tab", { name: "Home", exact: true }).click();
   assert.equal(
     await page.getByText("STALE ALICE RESPONSE", { exact: true }).count(),
     0,
@@ -229,6 +360,7 @@ const session = (email) => ({
     await page.getByText("Alice private debt", { exact: true }).count(),
     0,
   );
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
   await page.getByText("Sign out", { exact: true }).click();
   await page.getByLabel("Email address", { exact: true }).waitFor();
   assert.deepEqual(errors, []);
@@ -237,7 +369,7 @@ const session = (email) => ({
     fullPage: true,
   });
   console.log(
-    "PASS mocked email OTP: wrong code, success, persistence, expired-session refresh, sign-out cleanup, account isolation with stale request. No real emails sent.",
+    "PASS mocked account tabs: wrong OTP, accepted/disputed actions, shared detail freshness, explicit all-requests navigation, honest vaults, persistence/refresh, failed sign-out and stale-account isolation. No real emails sent.",
   );
   await browser.close();
 })().catch((e) => {

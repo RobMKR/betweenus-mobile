@@ -18,6 +18,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { amountToMinor, Balance, Debt, DEMO, money, request } from "./api";
 import AuthGate from "./AuthGate";
 import MobileShell, { Tab } from "./navigation/MobileShell";
+import {
+  accountPeople,
+  confirmedPersonBalances,
+} from "./navigation/accountPeople";
 const colors = {
   ink: "#203b35",
   muted: "#71817a",
@@ -98,13 +102,14 @@ function DebtHome({
   const [filter, setFilter] = useState<Filter>("all");
   const [tab, setTab] = useState<Tab>("home");
   const [details, setDetails] = useState<{
-    home: Debt | null;
-    people: Debt | null;
+    home: string | null;
+    people: string | null;
   }>({ home: null, people: null });
-  const detail = tab === "home" || tab === "people" ? details[tab] : null;
+  const detailId = tab === "home" || tab === "people" ? details[tab] : null;
+  const detail = debts.find((debt) => debt.id === detailId) ?? null;
   function setDetail(debt: Debt | null) {
     const page = tab === "people" ? "people" : "home";
-    setDetails((previous) => ({ ...previous, [page]: debt }));
+    setDetails((previous) => ({ ...previous, [page]: debt?.id ?? null }));
   }
   const [person, setPerson] = useState<string | null>(null);
   const [allRequests, setAllRequests] = useState(false);
@@ -142,10 +147,12 @@ function DebtHome({
     setDebts([]);
     setBalances([]);
     setLoaded(false);
-    setDetails({ home: null, people: null });
-    setPerson(null);
-    setAllRequests(false);
-    setTab("home");
+    if (DEMO) {
+      setDetails({ home: null, people: null });
+      setPerson(null);
+      setAllRequests(false);
+      setTab("home");
+    }
     setCreating(false);
     setEmail("");
     setAmount("");
@@ -210,7 +217,11 @@ function DebtHome({
         action === "dispute" ? { reason: reason.trim() } : {},
       );
       if (!active.current || requestIdentity.current !== operationToken) return;
-      setDetail(result.debt);
+      setDebts((current) =>
+        current.map((debt) =>
+          debt.id === result.debt.id ? result.debt : debt,
+        ),
+      );
       setReason("");
       await refresh();
     } catch (e) {
@@ -223,39 +234,7 @@ function DebtHome({
   }
   const total = balances.find((b) => b.currency === "AED");
   const pending = debts.filter((d) => d.status === "pending").length;
-  const identities = new Map<string, Set<string>>();
-  for (const debt of debts) {
-    const lender = debt.lenderId === me?.id;
-    const email = (
-      lender ? debt.borrowerEmail : debt.lenderEmail
-    ).toLowerCase();
-    const id = lender ? debt.borrowerId : debt.lenderId;
-    if (id) {
-      const ids = identities.get(email) ?? new Set<string>();
-      ids.add(id);
-      identities.set(email, ids);
-    }
-  }
-  const groups = new Map<
-    string,
-    { key: string; email: string; debts: Debt[] }
-  >();
-  for (const debt of debts) {
-    const lender = debt.lenderId === me?.id;
-    const email = (
-      lender ? debt.borrowerEmail : debt.lenderEmail
-    ).toLowerCase();
-    const id = lender ? debt.borrowerId : debt.lenderId;
-    const known = identities.get(email);
-    const key = id
-      ? `id:${id}`
-      : known?.size === 1
-        ? `id:${[...known][0]}`
-        : `email:${email}`;
-    const group = groups.get(key) ?? { key, email, debts: [] };
-    group.debts.push(debt);
-    groups.set(key, group);
-  }
+  const groups = accountPeople(debts, me?.id);
   const selected = person ? groups.get(person) : null;
   const filtered = (items: Debt[]) =>
     items.filter((d) => filter === "all" || d.status === filter);
@@ -556,6 +535,8 @@ function DebtHome({
                   () => {
                     setAllRequests(true);
                     setPerson(null);
+                    setFilter("all");
+                    setDetails((current) => ({ ...current, people: null }));
                     navigate("people");
                   },
                   true,
@@ -595,32 +576,22 @@ function DebtHome({
                 {filters()}
                 {selected ? (
                   <>
-                    {[...new Set(selected.debts.map((d) => d.currency))].map(
-                      (currency) => {
-                        const confirmed = selected.debts.filter(
-                          (d) =>
-                            d.currency === currency && d.status === "accepted",
-                        );
-                        const owed = confirmed
-                          .filter((d) => d.lenderId === me?.id)
-                          .reduce((sum, d) => sum + d.amountMinor, 0);
-                        const owe = confirmed
-                          .filter((d) => d.borrowerId === me?.id)
-                          .reduce((sum, d) => sum + d.amountMinor, 0);
-                        return (
-                          <View key={currency} style={s.card}>
-                            <Text style={s.label}>
-                              Confirmed only · {currency}
-                            </Text>
-                            <Text style={s.body}>
-                              Owed to you {money(owed, currency)}
-                            </Text>
-                            <Text style={s.body}>
-                              You owe {money(owe, currency)}
-                            </Text>
-                          </View>
-                        );
-                      },
+                    {confirmedPersonBalances(selected.debts, me?.id).map(
+                      (balance) => (
+                        <View key={balance.currency} style={s.card}>
+                          <Text style={s.label}>
+                            Confirmed only · {balance.currency}
+                          </Text>
+                          <Text style={s.body}>
+                            Owed to you{" "}
+                            {money(balance.receivableMinor, balance.currency)}
+                          </Text>
+                          <Text style={s.body}>
+                            You owe{" "}
+                            {money(balance.payableMinor, balance.currency)}
+                          </Text>
+                        </View>
+                      ),
                     )}
                     {rows(filtered(selected.debts))}
                   </>

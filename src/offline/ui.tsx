@@ -100,7 +100,7 @@ export function Sheet({
       <SafeAreaView style={s.safe}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -112,7 +112,7 @@ export function Sheet({
                 accessibilityLabel="Close details"
                 accessibilityRole="button"
                 onPress={onClose}
-                style={{ padding: 12 }}
+                style={{ padding: 12, minHeight: 44, minWidth: 44 }}
               >
                 <Text style={{ fontSize: 25, color: c.ink }}>×</Text>
               </Pressable>
@@ -130,9 +130,9 @@ export const s = StyleSheet.create({
     width: "100%",
     maxWidth: 760,
     alignSelf: "center",
-    padding: 24,
-    paddingBottom: 48,
-    gap: 24,
+    padding: 20,
+    paddingBottom: 28,
+    gap: 18,
   },
   sheet: {
     width: "100%",
@@ -162,8 +162,8 @@ export const s = StyleSheet.create({
     color: c.green,
   },
   title: {
-    fontSize: 36,
-    lineHeight: 42,
+    fontSize: 29,
+    lineHeight: 35,
     fontWeight: "600",
     letterSpacing: -1.3,
     color: c.ink,
@@ -198,17 +198,18 @@ export const s = StyleSheet.create({
   choice: {
     borderRadius: 20,
     backgroundColor: c.pale,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 15,
+    minHeight: 44,
   },
   choiceActive: { backgroundColor: c.green },
   card: {
-    padding: 19,
+    padding: 16,
     borderRadius: 18,
     backgroundColor: "white",
     borderWidth: 1,
     borderColor: c.line,
-    gap: 12,
+    gap: 9,
   },
   cardTitle: { fontSize: 16, fontWeight: "600", color: c.ink },
   line: { height: 1, backgroundColor: c.line },
@@ -227,7 +228,13 @@ export const s = StyleSheet.create({
   },
   tag: { fontSize: 10, fontWeight: "700", letterSpacing: 1, color: c.green },
   empty: { alignItems: "center", padding: 22, gap: 12 },
-  link: { fontSize: 13, fontWeight: "600", color: c.green, paddingVertical: 8 },
+  link: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: c.green,
+    paddingVertical: 12,
+    minHeight: 44,
+  },
   history: {
     paddingVertical: 14,
     borderBottomWidth: 1,
