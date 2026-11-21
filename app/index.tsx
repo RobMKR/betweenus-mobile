@@ -17,15 +17,15 @@ const SharedHome = lazy(() => import("../src/SharedHome"));
 const MODE_KEY = "betweenus.mode.v1";
 export default function Home() {
   const [mode, setMode] = useState<"offline" | "account" | null>(null);
-  const [loading, setLoading] = useState(!DEMO);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (DEMO) return;
     let active = true;
     AsyncStorage.getItem(MODE_KEY)
       .then((value) => {
         if (active && (value === "offline" || value === "account"))
           setMode(value);
+        else if (active && DEMO) setMode("account");
       })
       .catch(() => {
         if (active)
@@ -58,7 +58,7 @@ export default function Home() {
         <ActivityIndicator color={c.green} />
       </SafeAreaView>
     );
-  if (DEMO || mode === "account")
+  if (mode === "account")
     return (
       <Suspense
         fallback={

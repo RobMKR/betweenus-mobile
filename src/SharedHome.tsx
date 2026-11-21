@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
+  KeyboardAvoidingView,
+  Platform,
   Modal,
   Pressable,
   RefreshControl,
@@ -14,6 +17,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { amountToMinor, Balance, Debt, DEMO, money, request } from "./api";
 import AuthGate from "./AuthGate";
+import MobileShell, { Tab } from "./navigation/MobileShell";
+import {
+  accountPeople,
+  confirmedPersonBalances,
+} from "./navigation/accountPeople";
 const colors = {
   ink: "#203b35",
   muted: "#71817a",
@@ -29,13 +37,20 @@ const labels = {
 };
 type Filter = "all" | "pending" | "accepted" | "disputed";
 export default function Home({ onExit }: { onExit?: () => void }) {
+  const [accountVisible, setAccountVisible] = useState(false);
   if (DEMO) return <DebtHome onExit={onExit} />;
   return (
     <View style={{ flex: 1 }}>
-      {onExit && (
+      {onExit && !accountVisible && (
         <Pressable
           onPress={onExit}
-          style={{ padding: 14, backgroundColor: "#f7f8f3" }}
+          accessibilityRole="button"
+          style={{
+            minHeight: 44,
+            justifyContent: "center",
+            padding: 14,
+            backgroundColor: "#f7f8f3",
+          }}
         >
           <Text style={{ color: "#176b50" }}>‹ Mode selection</Text>
         </Pressable>
@@ -45,6 +60,7 @@ export default function Home({ onExit }: { onExit?: () => void }) {
           <DebtHome
             key={identity}
             accessToken={token}
+            onVisible={setAccountVisible}
             signOut={signOut}
             onExit={onExit}
           />
@@ -55,20 +71,24 @@ export default function Home({ onExit }: { onExit?: () => void }) {
 }
 function DebtHome({
   accessToken = "",
+  onVisible,
   signOut,
   onExit,
 }: {
   accessToken?: string;
+  onVisible?: (visible: boolean) => void;
   signOut?: () => Promise<void>;
   onExit?: () => void;
 }) {
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
+    onVisible?.(true);
     return () => {
       active.current = false;
+      onVisible?.(false);
     };
-  }, []);
+  }, [onVisible]);
   const [persona, setPersona] = useState<"lender" | "borrower">("lender");
   const token = DEMO ? `demo-${persona}` : accessToken;
   const requestIdentity = useRef(token);
@@ -80,7 +100,19 @@ function DebtHome({
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
-  const [detail, setDetail] = useState<Debt | null>(null);
+  const [tab, setTab] = useState<Tab>("home");
+  const [details, setDetails] = useState<{
+    home: string | null;
+    people: string | null;
+  }>({ home: null, people: null });
+  const detailId = tab === "home" || tab === "people" ? details[tab] : null;
+  const detail = debts.find((debt) => debt.id === detailId) ?? null;
+  function setDetail(debt: Debt | null) {
+    const page = tab === "people" ? "people" : "home";
+    setDetails((previous) => ({ ...previous, [page]: debt?.id ?? null }));
+  }
+  const [person, setPerson] = useState<string | null>(null);
+  const [allRequests, setAllRequests] = useState(false);
   const [creating, setCreating] = useState(false);
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
@@ -115,7 +147,12 @@ function DebtHome({
     setDebts([]);
     setBalances([]);
     setLoaded(false);
-    setDetail(null);
+    if (DEMO) {
+      setDetails({ home: null, people: null });
+      setPerson(null);
+      setAllRequests(false);
+      setTab("home");
+    }
     setCreating(false);
     setEmail("");
     setAmount("");
@@ -180,7 +217,11 @@ function DebtHome({
         action === "dispute" ? { reason: reason.trim() } : {},
       );
       if (!active.current || requestIdentity.current !== operationToken) return;
-      setDetail(result.debt);
+      setDebts((current) =>
+        current.map((debt) =>
+          debt.id === result.debt.id ? result.debt : debt,
+        ),
+      );
       setReason("");
       await refresh();
     } catch (e) {
@@ -192,14 +233,61 @@ function DebtHome({
     }
   }
   const total = balances.find((b) => b.currency === "AED");
-  const shown = debts.filter((d) => filter === "all" || d.status === filter);
   const pending = debts.filter((d) => d.status === "pending").length;
-  function button(title: string, fn: () => void, secondary = false) {
+  const groups = accountPeople(debts, me?.id);
+  const selected = person ? groups.get(person) : null;
+  const filtered = (items: Debt[]) =>
+    items.filter((d) => filter === "all" || d.status === filter);
+  const sorted = [...debts].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+  function navigate(next: Tab) {
+    setTab(next);
+    setReason("");
+    setError("");
+  }
+  function openDebt(debt: Debt) {
+    setDetail(debt);
+    setReason("");
+    setError("");
+  }
+  function back() {
+    if (detail) {
+      setDetail(null);
+      setReason("");
+      setError("");
+      return true;
+    }
+    if (tab === "people" && (person || allRequests)) {
+      setPerson(null);
+      setAllRequests(false);
+      return true;
+    }
+    if (tab !== "home") {
+      navigate("home");
+      return true;
+    }
+    return false;
+  }
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      back,
+    );
+    return () => subscription.remove();
+  }, [tab, detail, person, allRequests]);
+  function button(
+    title: string,
+    action: () => void,
+    secondary = false,
+    disabled = busy,
+  ) {
     return (
       <Pressable
-        disabled={busy}
-        onPress={fn}
-        style={[s.button, secondary && s.secondary, busy && { opacity: 0.6 }]}
+        accessibilityRole="button"
+        disabled={disabled}
+        onPress={action}
+        style={[s.button, secondary && s.secondary, disabled && s.disabled]}
       >
         <Text style={[s.buttonText, secondary && { color: colors.green }]}>
           {title}
@@ -207,142 +295,30 @@ function DebtHome({
       </Pressable>
     );
   }
-  function close() {
-    setCreating(false);
-    setDetail(null);
+  function startCreate() {
     setError("");
-    setReason("");
+    setCreating(true);
   }
-  return (
-    <SafeAreaView style={s.safe}>
+  function filters() {
+    return (
       <ScrollView
-        contentContainerStyle={s.page}
-        refreshControl={
-          <RefreshControl refreshing={busy} onRefresh={refresh} />
-        }
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={s.filters}
       >
-        {onExit && (
-          <Pressable onPress={onExit}>
-            <Text style={s.small}>‹ Mode selection</Text>
-          </Pressable>
-        )}
-        <View style={s.top}>
-          <View style={s.brand}>
-            <View style={s.logo}>
-              <Ionicons name="people-outline" size={25} color="white" />
-            </View>
-            <Text style={s.brandName}>BetweenUs</Text>
-          </View>
-          <View style={s.avatar}>
-            <Text style={s.avatarText}>{persona === "lender" ? "A" : "J"}</Text>
-          </View>
-        </View>
-        {DEMO && (
-          <View style={s.demo}>
-            <Text style={s.demoLabel}>LOCAL DEMO · VIEW AS</Text>
-            <View style={s.row}>
-              {(["lender", "borrower"] as const).map((p) => (
-                <Pressable
-                  key={p}
-                  onPress={() => setPersona(p)}
-                  style={[s.persona, persona === p && s.personaActive]}
-                >
-                  <Text
-                    style={{
-                      color: persona === p ? colors.green : colors.muted,
-                      fontWeight: "600",
-                    }}
-                  >
-                    {p === "lender" ? "Alex · lender" : "John · borrower"}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-        {!DEMO && (
-          <View style={s.rowBetween}>
-            <Text style={s.small}>
-              {me?.email || "Connecting your account…"}
-            </Text>
-            <Pressable onPress={() => void signOut?.()}>
-              <Text style={{ color: colors.green, fontWeight: "600" }}>
-                Sign out
-              </Text>
-            </Pressable>
-          </View>
-        )}
-        <View style={s.heading}>
-          <Text style={s.eyebrow}>A LITTLE CLARITY, BETWEEN FRIENDS</Text>
-          <Text style={s.title}>Good relationships.{"\n"}Clear balances.</Text>
-          <Text style={s.body}>
-            Keep shared debts simple, and everyone on the same page.
-          </Text>
-        </View>
-        <View style={s.balanceCard}>
-          <View style={s.rowBetween}>
-            <Text style={s.balanceLabel}>YOUR OVERVIEW</Text>
-            <Ionicons name="leaf-outline" size={21} color="#b9dbc7" />
-          </View>
-          <Text style={s.balanceAmount}>
-            {loaded ? money(total?.netMinor ?? 0) : "—"}
-          </Text>
-          <Text style={s.balanceCaption}>
-            {(total?.netMinor ?? 0) < 0
-              ? "Your net amount to pay back"
-              : "Your net amount to receive"}
-          </Text>
-          <View style={s.balanceDivider} />
-          <View style={s.row}>
-            <View style={s.half}>
-              <Text style={s.balanceSmall}>Owed to you</Text>
-              <Text style={s.balanceValue}>
-                {loaded ? money(total?.receivableMinor ?? 0) : "—"}
-              </Text>
-            </View>
-            <View style={s.half}>
-              <Text style={s.balanceSmall}>You owe</Text>
-              <Text style={s.balanceValue}>
-                {loaded ? money(total?.payableMinor ?? 0) : "—"}
-              </Text>
-            </View>
-          </View>
-          <Text style={s.balanceFoot}>
-            Confirmed debts only · balances stay separate by currency
-          </Text>
-        </View>
-        <View style={s.rowBetween}>
-          <View>
-            <Text style={s.sectionTitle}>Shared debts</Text>
-            <Text style={s.small}>{pending} awaiting confirmation</Text>
-          </View>
-          <Pressable
-            disabled={!me || busy}
-            onPress={() => {
-              setError("");
-              setCreating(true);
-            }}
-            style={[s.add, !me && { opacity: 0.4 }]}
-          >
-            <Ionicons name="add" size={19} color="white" />
-            <Text style={s.buttonText}>Add debt</Text>
-          </Pressable>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.filters}
-        >
-          {(["all", "pending", "accepted", "disputed"] as Filter[]).map((f) => (
+        {(["all", "pending", "accepted", "disputed"] as Filter[]).map(
+          (value) => (
             <Pressable
-              onPress={() => setFilter(f)}
-              key={f}
-              style={[s.filter, filter === f && s.activeFilter]}
+              key={value}
+              accessibilityRole="button"
+              accessibilityState={{ selected: filter === value }}
+              onPress={() => setFilter(value)}
+              style={[s.filter, filter === value && s.activeFilter]}
             >
               <Text
                 style={{
+                  color: filter === value ? "white" : colors.ink,
                   fontWeight: "600",
-                  color: filter === f ? "white" : colors.muted,
                 }}
               >
                 {
@@ -351,240 +327,480 @@ function DebtHome({
                     pending: "Pending",
                     accepted: "Confirmed",
                     disputed: "Needs resolution",
-                  }[f]
+                  }[value]
                 }
               </Text>
             </Pressable>
-          ))}
-        </ScrollView>
-        {!!error && !creating && !detail && (
-          <Text accessibilityRole="alert" style={s.error}>
-            {error}
-            {"\n"}Pull down to retry. Check the API address and connection.
-          </Text>
+          ),
         )}
-        {busy && !loaded && <ActivityIndicator color={colors.green} />}
-        {shown.map((d) => (
-          <Pressable
-            key={d.id}
-            onPress={() => {
-              setDetail(d);
-              setError("");
-            }}
-            style={s.debt}
-          >
-            <View
-              style={[
-                s.debtAvatar,
-                {
-                  backgroundColor:
-                    d.status === "disputed" ? "#f9ece0" : colors.pale,
-                },
-              ]}
-            >
-              <Ionicons
-                name={
-                  d.lenderId === me?.id
-                    ? "arrow-up-outline"
-                    : "arrow-down-outline"
-                }
-                color={colors.green}
-                size={23}
-              />
-            </View>
-            <View style={{ flex: 1, gap: 5 }}>
-              <Text style={s.debtName}>
-                {
-                  (d.lenderId === me?.id
-                    ? d.borrowerEmail
-                    : d.lenderEmail
-                  ).split("@")[0]
-                }
-              </Text>
-              <Text style={s.small} numberOfLines={1}>
-                {d.description}
-              </Text>
-              <Text
-                style={[
-                  s.status,
-                  d.status === "disputed" && { color: "#a4652d" },
-                ]}
-              >
-                {labels[d.status]}
-              </Text>
-            </View>
-            <View style={{ alignItems: "flex-end", gap: 7 }}>
-              <Text style={s.debtAmount}>
-                {money(d.amountMinor, d.currency)}
-              </Text>
-              <Text style={s.small}>
-                {d.lenderId === me?.id ? "owes you" : "you owe"} ›
-              </Text>
-            </View>
-          </Pressable>
-        ))}
-        {!shown.length && loaded && (
-          <View style={s.empty}>
-            <Ionicons
-              name="chatbubbles-outline"
-              size={31}
-              color={colors.muted}
-            />
-            <Text style={s.cardTitle}>A clear page</Text>
-            <Text style={s.body}>
-              No {filter === "all" ? "shared" : filter} debts here yet.
+      </ScrollView>
+    );
+  }
+  function rows(items: Debt[]) {
+    return items.length ? (
+      items.map((debt) => (
+        <Pressable
+          key={debt.id}
+          accessibilityRole="button"
+          accessibilityLabel={`Open debt: ${debt.description}`}
+          onPress={() => openDebt(debt)}
+          style={s.debt}
+        >
+          <View style={s.rowBetween}>
+            <Text style={[s.cardTitle, { flex: 1 }]}>
+              {debt.lenderId === me?.id ? debt.borrowerEmail : debt.lenderEmail}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </View>
+          <Text style={s.body}>{debt.description}</Text>
+          <View style={s.rowBetween}>
+            <Text style={s.amount}>
+              {money(debt.amountMinor, debt.currency)}
+            </Text>
+            <Text style={s.small}>
+              {debt.lenderId === me?.id ? "owes you" : "you owe"}
             </Text>
           </View>
-        )}
-        <View style={s.footer}>
-          <Ionicons name="heart-outline" color={colors.muted} size={15} />
-          <Text style={s.small}> Built on trust. Confirmed together.</Text>
+          <Text style={s.status}>{labels[debt.status]}</Text>
+        </Pressable>
+      ))
+    ) : loaded ? (
+      <View style={s.card}>
+        <Text style={s.cardTitle}>A clear page</Text>
+        <Text style={s.body}>No matching requests yet.</Text>
+      </View>
+    ) : null;
+  }
+  function detailPage(debt: Debt) {
+    return (
+      <>
+        {button("‹ Back", () => back(), true, false)}
+        <Text style={s.title}>Debt details</Text>
+        <View style={s.balanceCard}>
+          <Text style={s.balanceSmall}>{labels[debt.status]}</Text>
+          <Text style={s.balanceAmount}>
+            {money(debt.amountMinor, debt.currency)}
+          </Text>
+          <Text style={s.balanceSmall}>{debt.description}</Text>
         </View>
-        <Text style={[s.small, { textAlign: "center" }]}>
-          A shared record, not a payment service.
-        </Text>
-      </ScrollView>
-      <Modal
-        visible={creating || !!detail}
-        animationType="slide"
-        onRequestClose={close}
-      >
-        <SafeAreaView style={s.safe}>
-          <ScrollView contentContainerStyle={s.modal}>
-            <View style={s.rowBetween}>
-              <Text style={s.sectionTitle}>
-                {creating ? "Add a shared debt" : "Debt details"}
+        <View style={s.card}>
+          <Text style={s.label}>Lent by</Text>
+          <Text style={s.body}>{debt.lenderEmail}</Text>
+          <Text style={s.label}>Borrowed by</Text>
+          <Text style={s.body}>{debt.borrowerEmail}</Text>
+        </View>
+        {debt.status === "pending" &&
+          debt.borrowerEmail.toLowerCase() === me?.email.toLowerCase() && (
+            <View style={s.card}>
+              <Text style={s.sectionTitle}>Does this look right?</Text>
+              <Text style={s.body}>
+                Confirm to include this request in both balances. If something
+                is off, add a reason.
               </Text>
-              <Pressable
-                accessibilityLabel="Close"
-                onPress={close}
-                style={s.close}
-              >
-                <Ionicons name="close" size={25} color={colors.ink} />
-              </Pressable>
+              {button("Confirm debt", () => void respond("accept"))}
+              <TextInput
+                accessibilityLabel="Dispute reason"
+                value={reason}
+                onChangeText={setReason}
+                multiline
+                maxLength={1000}
+                placeholder="What needs correcting?"
+                style={s.input}
+              />
+              {button(
+                "Flag for resolution",
+                () => void respond("dispute"),
+                true,
+              )}
             </View>
-            {creating ? (
-              <>
-                <Text style={s.body}>
-                  You’re recording money you lent. The other person will review
-                  it before it counts toward your balance.
-                </Text>
-                <Text style={s.label}>Who owes you?</Text>
-                <TextInput
-                  style={s.input}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="friend@example.com"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  accessibilityLabel="Borrower email"
-                />
-                <Text style={s.label}>Amount · AED</Text>
-                <TextInput
-                  style={s.input}
-                  value={amount}
-                  onChangeText={setAmount}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                  accessibilityLabel="Amount in AED"
-                />
-                <Text style={s.label}>What was it for?</Text>
-                <TextInput
-                  style={s.input}
-                  value={note}
-                  onChangeText={setNote}
-                  placeholder="Dinner, a trip, a little help…"
-                  maxLength={500}
-                  accessibilityLabel="Description"
-                />
-                <Text style={s.small}>
-                  No email or push notification is sent in this pilot.
-                </Text>
-                {button("Send for confirmation", create)}
-              </>
-            ) : (
-              detail && (
-                <>
-                  <View style={s.detailHero}>
-                    <Text style={s.status}>{labels[detail.status]}</Text>
-                    <Text style={s.detailAmount}>
-                      {money(detail.amountMinor, detail.currency)}
-                    </Text>
-                    <Text style={s.cardTitle}>{detail.description}</Text>
-                  </View>
-                  <Text style={s.label}>Lent by</Text>
-                  <Text style={s.body}>{detail.lenderEmail}</Text>
-                  <Text style={s.label}>Borrowed by</Text>
-                  <Text style={s.body}>{detail.borrowerEmail}</Text>
-                  {detail.status === "pending" &&
-                    detail.borrowerEmail.toLowerCase() ===
-                      me?.email.toLowerCase() && (
-                      <View style={s.card}>
-                        <Text style={s.cardTitle}>Does this look right?</Text>
-                        <Text style={s.body}>
-                          Confirm to include this debt in both balances. If
-                          something is off, add a reason below.
-                        </Text>
-                        {button("Confirm debt", () => respond("accept"))}
-                        <TextInput
-                          style={s.input}
-                          value={reason}
-                          onChangeText={setReason}
-                          placeholder="What needs correcting?"
-                          maxLength={500}
-                          multiline
-                          accessibilityLabel="Dispute reason"
-                        />
-                        {button(
-                          "Flag for resolution",
-                          () => respond("dispute"),
-                          true,
-                        )}
-                      </View>
-                    )}
-                  <Text style={[s.sectionTitle, { marginTop: 22 }]}>
-                    Shared history
-                  </Text>
-                  {detail.history.map((event, i) => (
-                    <View key={event.id || i} style={s.history}>
-                      <View style={s.dot} />
-                      <View style={{ flex: 1, gap: 5 }}>
-                        <Text style={s.cardTitle}>
-                          {{
-                            created: "Debt recorded",
-                            accepted: "Confirmed by borrower",
-                            disputed: "Flagged for resolution",
-                          }[event.action || ""] || event.action}
-                        </Text>
-                        <Text style={s.small}>
-                          {new Date(event.createdAt).toLocaleString()}
-                        </Text>
-                        {event.reason && (
-                          <Text style={s.body}>{event.reason}</Text>
-                        )}
-                      </View>
-                    </View>
-                  ))}
-                  {detail.status === "disputed" && (
-                    <Text style={s.body}>
-                      Talk with each other to resolve the difference. Editing,
-                      settling, and closing disputes are not available in this
-                      pilot.
-                    </Text>
-                  )}
-                </>
-              )
-            )}
-            {!!error && (
+          )}
+        <Text style={s.sectionTitle}>Shared history</Text>
+        {debt.history.map((event, index) => (
+          <View key={event.id ?? index} style={s.card}>
+            <Text style={s.cardTitle}>
+              {{
+                created: "Debt recorded",
+                accepted: "Confirmed by borrower",
+                disputed: "Flagged for resolution",
+              }[event.action || event.type || "created"] ?? "History recorded"}
+            </Text>
+            <Text style={s.small}>
+              {new Date(event.createdAt).toLocaleString()}
+            </Text>
+            {!!event.reason && <Text style={s.body}>{event.reason}</Text>}
+          </View>
+        ))}
+        {debt.status === "disputed" && (
+          <Text style={s.body}>
+            Talk together to resolve the difference. Editing, settling and
+            closing disputes are not available in this pilot.
+          </Text>
+        )}
+      </>
+    );
+  }
+  return (
+    <>
+      <MobileShell
+        tab={tab}
+        onTabChange={navigate}
+        mode={DEMO ? "LOCAL DEMO" : "ACCOUNT"}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={s.page}
+            refreshControl={
+              tab === "home" || tab === "people" ? (
+                <RefreshControl refreshing={busy} onRefresh={refresh} />
+              ) : undefined
+            }
+          >
+            {!!error && !creating && (
               <Text accessibilityRole="alert" style={s.error}>
                 {error}
               </Text>
             )}
-            {busy && <ActivityIndicator color={colors.green} />}
+            {busy && !loaded && (
+              <ActivityIndicator
+                accessibilityLabel="Loading requests"
+                color={colors.green}
+              />
+            )}
+            {detail ? (
+              detailPage(detail)
+            ) : tab === "home" ? (
+              <>
+                <Text style={s.eyebrow}>A LITTLE CLARITY, BETWEEN FRIENDS</Text>
+                <Text style={s.title}>Your shared overview</Text>
+                <Text style={s.body}>Clear records. Confirmed together.</Text>
+                <View style={s.balanceCard}>
+                  <Text style={s.balanceSmall}>CONFIRMED AED BALANCE</Text>
+                  <Text style={s.balanceAmount}>
+                    {loaded ? money(total?.netMinor ?? 0) : "—"}
+                  </Text>
+                  <Text style={s.balanceSmall}>
+                    {(total?.netMinor ?? 0) < 0
+                      ? "Net amount to pay back"
+                      : "Net amount to receive"}
+                  </Text>
+                  <View style={s.divider} />
+                  <Text style={s.balanceSmall}>Owed to you</Text>
+                  <Text style={s.balanceValue}>
+                    {loaded ? money(total?.receivableMinor ?? 0) : "—"}
+                  </Text>
+                  <Text style={s.balanceSmall}>You owe</Text>
+                  <Text style={s.balanceValue}>
+                    {loaded ? money(total?.payableMinor ?? 0) : "—"}
+                  </Text>
+                  <Text style={s.balanceSmall}>
+                    Confirmed debts only · no currency conversion
+                  </Text>
+                </View>
+                {balances
+                  .filter((b) => b.currency !== "AED")
+                  .map((balance) => (
+                    <View key={balance.currency} style={s.card}>
+                      <Text style={s.cardTitle}>
+                        {balance.currency} · confirmed only
+                      </Text>
+                      <Text style={s.body}>
+                        Owed to you{" "}
+                        {money(balance.receivableMinor, balance.currency)}
+                      </Text>
+                      <Text style={s.body}>
+                        You owe {money(balance.payableMinor, balance.currency)}
+                      </Text>
+                    </View>
+                  ))}
+                <View style={s.shortcuts}>
+                  {button("Add debt", startCreate, false, busy || !me)}
+                  {button(
+                    "Create vault",
+                    () => navigate("vaults"),
+                    true,
+                    false,
+                  )}
+                </View>
+                <View style={s.rowBetween}>
+                  <Text style={s.sectionTitle}>Recent requests</Text>
+                  <Text style={s.small}>{pending} pending</Text>
+                </View>
+                {rows(sorted.slice(0, 5))}
+                {button(
+                  "All requests",
+                  () => {
+                    setAllRequests(true);
+                    setPerson(null);
+                    setFilter("all");
+                    setDetails((current) => ({ ...current, people: null }));
+                    navigate("people");
+                  },
+                  true,
+                  false,
+                )}
+                <Text style={s.small}>
+                  A shared record, not a payment service. Pending and disputed
+                  requests stay outside confirmed balances.
+                </Text>
+              </>
+            ) : tab === "people" ? (
+              <>
+                {(selected || allRequests) &&
+                  button(
+                    "‹ All people",
+                    () => {
+                      setPerson(null);
+                      setAllRequests(false);
+                      setDetail(null);
+                    },
+                    true,
+                    false,
+                  )}
+                <Text style={s.title}>
+                  {selected
+                    ? "Your shared records"
+                    : allRequests
+                      ? "All requests"
+                      : "People"}
+                </Text>
+                {selected && <Text style={s.body}>{selected.email}</Text>}
+                <Text style={s.body}>
+                  Existing requests grouped by counterparty account or
+                  invitation email.
+                </Text>
+                {button("Add debt", startCreate, false, busy || !me)}
+                {filters()}
+                {selected ? (
+                  <>
+                    {confirmedPersonBalances(selected.debts, me?.id).map(
+                      (balance) => (
+                        <View key={balance.currency} style={s.card}>
+                          <Text style={s.label}>
+                            Confirmed only · {balance.currency}
+                          </Text>
+                          <Text style={s.body}>
+                            Owed to you{" "}
+                            {money(balance.receivableMinor, balance.currency)}
+                          </Text>
+                          <Text style={s.body}>
+                            You owe{" "}
+                            {money(balance.payableMinor, balance.currency)}
+                          </Text>
+                        </View>
+                      ),
+                    )}
+                    {rows(filtered(selected.debts))}
+                  </>
+                ) : allRequests ? (
+                  rows(filtered(sorted))
+                ) : (
+                  <>
+                    {[...groups.values()]
+                      .filter((group) => filtered(group.debts).length > 0)
+                      .map((group) => (
+                        <Pressable
+                          key={group.key}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open person ${group.email}`}
+                          onPress={() => setPerson(group.key)}
+                          style={s.card}
+                        >
+                          <View style={s.rowBetween}>
+                            <Text style={[s.cardTitle, { flex: 1 }]}>
+                              {group.email}
+                            </Text>
+                            <Ionicons
+                              name="chevron-forward"
+                              size={18}
+                              color={colors.muted}
+                            />
+                          </View>
+                          <Text style={s.small}>
+                            {group.debts.length} request
+                            {group.debts.length === 1 ? "" : "s"} ·{" "}
+                            {
+                              group.debts.filter((d) => d.status === "pending")
+                                .length
+                            }{" "}
+                            pending ·{" "}
+                            {
+                              group.debts.filter((d) => d.status === "disputed")
+                                .length
+                            }{" "}
+                            need resolution
+                          </Text>
+                        </Pressable>
+                      ))}
+                    {loaded &&
+                      ![...groups.values()].some(
+                        (g) => filtered(g.debts).length,
+                      ) && (
+                        <View style={s.card}>
+                          <Text style={s.cardTitle}>No people here yet</Text>
+                          <Text style={s.body}>
+                            Add a debt or change the filter to find your
+                            existing requests.
+                          </Text>
+                        </View>
+                      )}
+                    {button(
+                      "All requests",
+                      () => setAllRequests(true),
+                      true,
+                      false,
+                    )}
+                  </>
+                )}
+              </>
+            ) : tab === "vaults" ? (
+              <>
+                <Text style={s.title}>Vaults</Text>
+                <View style={s.card}>
+                  <Ionicons
+                    name="albums-outline"
+                    size={30}
+                    color={colors.green}
+                  />
+                  <Text style={s.sectionTitle}>
+                    Account vaults are not available yet
+                  </Text>
+                  <Text style={s.body}>
+                    Shared account vaults are not supported by this pilot.
+                    Device-only mode has local vaults stored on this device;
+                    those records are not synced to your account.
+                  </Text>
+                  {onExit &&
+                    button("Choose device-only mode", onExit, true, false)}
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={s.title}>Settings</Text>
+                <View style={s.card}>
+                  <Text style={s.label}>
+                    {DEMO ? "Local demo" : "Account mode"}
+                  </Text>
+                  <Text style={s.body}>
+                    {DEMO
+                      ? "Fake identities and demo server data. Nothing here is a real account."
+                      : me?.email || "Connecting your account…"}
+                  </Text>
+                  <Text style={s.body}>
+                    {DEMO
+                      ? "Demo records may disappear when the local API restarts."
+                      : "Shared requests live on the configured API. Device-only records remain separate on this device and are not uploaded."}
+                  </Text>
+                </View>
+                {DEMO && (
+                  <View style={s.card}>
+                    <Text style={s.label}>LOCAL DEMO · VIEW AS</Text>
+                    {(["lender", "borrower"] as const).map((p) => (
+                      <Pressable
+                        key={p}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: persona === p }}
+                        onPress={() => setPersona(p)}
+                        style={[s.button, s.secondary]}
+                      >
+                        <Text style={s.cardTitle}>
+                          {p === "lender" ? "Alex · lender" : "John · borrower"}
+                          {persona === p ? " ✓" : ""}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+                {onExit && button("Mode selection", onExit, true, false)}
+                {!DEMO &&
+                  signOut &&
+                  button("Sign out", () => void signOut(), true, false)}
+                <Text style={s.small}>
+                  A shared record, not a payment service. No email or push
+                  invitations are sent by this pilot.
+                </Text>
+              </>
+            )}
           </ScrollView>
+        </KeyboardAvoidingView>
+      </MobileShell>
+      <Modal
+        visible={creating}
+        animationType="slide"
+        onRequestClose={() => setCreating(false)}
+      >
+        <SafeAreaView style={s.safe}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={s.page}
+            >
+              <View style={s.rowBetween}>
+                <Text style={[s.sectionTitle, { flex: 1 }]}>
+                  Add a shared debt
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                  onPress={() => setCreating(false)}
+                  style={s.close}
+                >
+                  <Ionicons name="close" size={24} color={colors.ink} />
+                </Pressable>
+              </View>
+              <Text style={s.body}>
+                Record money you lent. The other person must confirm before it
+                counts toward balances.
+              </Text>
+              <Text style={s.label}>Who owes you?</Text>
+              <TextInput
+                accessibilityLabel="Borrower email"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                maxLength={254}
+                placeholder="friend@example.com"
+                style={s.input}
+              />
+              <Text style={s.label}>Amount · AED</Text>
+              <TextInput
+                accessibilityLabel="Amount in AED"
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                style={s.input}
+              />
+              <Text style={s.label}>What was it for?</Text>
+              <TextInput
+                accessibilityLabel="Description"
+                value={note}
+                onChangeText={setNote}
+                maxLength={500}
+                placeholder="Dinner, a trip, a little help…"
+                style={s.input}
+              />
+              <Text style={s.small}>
+                No email or push notification is sent in this pilot.
+              </Text>
+              {!!error && (
+                <Text accessibilityRole="alert" style={s.error}>
+                  {error}
+                </Text>
+              )}
+              {button("Send for confirmation", () => void create())}
+            </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 const s = StyleSheet.create({
@@ -593,215 +809,106 @@ const s = StyleSheet.create({
     width: "100%",
     maxWidth: 760,
     alignSelf: "center",
-    padding: 24,
-    paddingBottom: 36,
-    gap: 22,
+    padding: 20,
+    paddingBottom: 32,
+    gap: 16,
   },
-  top: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  brand: { flexDirection: "row", alignItems: "center", gap: 10 },
-  logo: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: colors.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  brandName: {
-    fontSize: 23,
-    fontWeight: "700",
+  title: {
+    fontSize: 29,
+    lineHeight: 35,
+    fontWeight: "600",
+    letterSpacing: -1,
     color: colors.ink,
-    letterSpacing: -0.8,
   },
-  avatar: {
-    width: 39,
-    height: 39,
-    borderRadius: 20,
-    backgroundColor: "#e7dfcb",
-    alignItems: "center",
-    justifyContent: "center",
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    color: colors.green,
   },
-  avatarText: { fontWeight: "700", color: colors.ink },
-  demo: {
+  sectionTitle: { fontSize: 20, fontWeight: "600", color: colors.ink },
+  cardTitle: { fontSize: 15, fontWeight: "600", color: colors.ink },
+  body: { fontSize: 15, lineHeight: 22, color: colors.muted },
+  small: { fontSize: 12, lineHeight: 18, color: colors.muted },
+  label: { fontSize: 13, fontWeight: "600", color: colors.ink },
+  card: {
+    padding: 17,
+    borderRadius: 17,
+    backgroundColor: "white",
     borderWidth: 1,
     borderColor: colors.line,
-    padding: 10,
-    borderRadius: 12,
-    gap: 8,
+    gap: 12,
   },
-  demoLabel: {
-    fontSize: 9,
-    letterSpacing: 1.5,
-    fontWeight: "700",
-    color: colors.muted,
+  debt: {
+    padding: 17,
+    borderRadius: 17,
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: colors.line,
+    gap: 9,
+    minHeight: 80,
   },
-  row: { flexDirection: "row", gap: 10 },
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
   },
-  persona: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
-  personaActive: { backgroundColor: colors.pale },
-  heading: { gap: 12, paddingTop: 8 },
-  eyebrow: {
-    fontSize: 10,
-    letterSpacing: 1.7,
-    color: colors.green,
-    fontWeight: "700",
-  },
-  title: {
-    fontSize: 37,
-    lineHeight: 43,
-    letterSpacing: -1.6,
-    fontWeight: "600",
-    color: colors.ink,
-  },
-  body: { fontSize: 15, lineHeight: 23, color: colors.muted },
+  amount: { fontSize: 19, fontWeight: "600", color: colors.ink },
+  status: { fontSize: 12, fontWeight: "600", color: colors.green },
   balanceCard: {
     backgroundColor: colors.ink,
-    borderRadius: 23,
-    padding: 25,
+    padding: 22,
+    borderRadius: 22,
     gap: 10,
   },
-  balanceLabel: {
-    fontSize: 10,
-    color: "#d2dfd7",
-    letterSpacing: 1.8,
-    fontWeight: "700",
-  },
-  balanceAmount: {
-    color: "white",
-    fontSize: 39,
-    fontWeight: "600",
-    letterSpacing: -1,
-    marginTop: 8,
-  },
-  balanceCaption: { color: "#ccddd2", fontSize: 13 },
-  balanceDivider: { height: 1, backgroundColor: "#456056", marginVertical: 10 },
-  half: { flex: 1, gap: 8 },
-  balanceSmall: { color: "#bfcec5", fontSize: 12 },
-  balanceValue: { color: "white", fontSize: 19, fontWeight: "600" },
-  balanceFoot: { color: "#a9c1b1", fontSize: 10, marginTop: 12 },
-  sectionTitle: {
-    fontSize: 21,
-    fontWeight: "600",
-    color: colors.ink,
-    letterSpacing: -0.5,
-  },
-  small: { fontSize: 12, color: colors.muted, lineHeight: 18 },
-  add: {
-    backgroundColor: colors.green,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
+  balanceAmount: { fontSize: 32, fontWeight: "600", color: "white" },
+  balanceValue: { fontSize: 23, fontWeight: "600", color: "white" },
+  balanceSmall: { fontSize: 12, lineHeight: 18, color: "#d2e1d7" },
+  divider: { height: 1, backgroundColor: "#486255", marginVertical: 6 },
   button: {
-    padding: 16,
+    minHeight: 46,
+    padding: 13,
     borderRadius: 12,
     backgroundColor: colors.green,
     alignItems: "center",
-    marginTop: 12,
+    justifyContent: "center",
   },
-  buttonText: { color: "white", fontSize: 13, fontWeight: "600" },
+  buttonText: { fontSize: 14, fontWeight: "600", color: "white" },
   secondary: { backgroundColor: colors.pale },
+  disabled: { opacity: 0.5 },
+  shortcuts: { gap: 10 },
   filters: { gap: 8 },
   filter: {
+    minHeight: 44,
     paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: "#edf0e9",
+    justifyContent: "center",
+    borderRadius: 22,
+    backgroundColor: colors.pale,
   },
   activeFilter: { backgroundColor: colors.ink },
-  debt: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    paddingVertical: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  debtAvatar: {
-    width: 47,
-    height: 47,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  debtName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.ink,
-    textTransform: "capitalize",
-  },
-  debtAmount: { fontSize: 15, fontWeight: "600", color: colors.ink },
-  status: { fontSize: 11, fontWeight: "600", color: colors.green },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 14,
-  },
-  empty: { alignItems: "center", padding: 28, gap: 10 },
-  card: {
-    padding: 20,
-    borderRadius: 18,
-    backgroundColor: "white",
-    gap: 10,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  cardTitle: { fontSize: 15, fontWeight: "600", color: colors.ink },
   input: {
-    backgroundColor: "white",
-    borderColor: "#d5ded3",
-    borderWidth: 1,
-    borderRadius: 11,
-    padding: 15,
-    fontSize: 16,
-    color: colors.ink,
     minHeight: 51,
+    borderWidth: 1,
+    borderColor: "#d5ded3",
+    borderRadius: 11,
+    backgroundColor: "white",
+    padding: 15,
+    color: colors.ink,
+    fontSize: 16,
   },
-  label: { fontSize: 13, fontWeight: "600", color: colors.ink, marginTop: 12 },
-  modal: {
-    width: "100%",
-    maxWidth: 640,
-    alignSelf: "center",
-    padding: 24,
-    gap: 15,
-    paddingBottom: 50,
-  },
-  close: { padding: 8 },
-  detailHero: { paddingVertical: 25, gap: 15 },
-  detailAmount: { fontSize: 40, fontWeight: "600", color: colors.ink },
-  history: {
-    flexDirection: "row",
-    gap: 15,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  dot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: colors.green,
-    marginTop: 5,
+  close: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   error: {
+    backgroundColor: "#fff0ed",
     color: "#a33131",
     fontSize: 14,
     lineHeight: 21,
     padding: 14,
-    backgroundColor: "#fff0ed",
     borderRadius: 10,
   },
 });
