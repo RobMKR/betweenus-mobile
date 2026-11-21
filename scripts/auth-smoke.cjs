@@ -205,13 +205,14 @@ const session = (email) => ({
   await button("Confirm debt").click();
   await expect(page.getByText("Confirmed", { exact: true })).toBeVisible();
   await tab("People");
-  assert.equal(
-    await button("Confirm debt").count(),
-    0,
-    "retained other-tab detail uses current accepted record",
-  );
+  await expect(page.getByText("Debt details", { exact: true })).toHaveCount(0);
+  await button("Open person carol@example.com").click();
+  await button("Open debt: Confirm this lunch").click();
+  await expect(page.getByText("Confirmed", { exact: true })).toBeVisible();
+  await expect(button("Confirm debt")).toHaveCount(0);
   await button("‹ Back").click();
-  await button("‹ All people").click();
+  await tab("People");
+  await expect(button("‹ All people")).toHaveCount(0);
   await button("Open person sam@example.com").click();
   await button("Open debt: Question this taxi").click();
   await page
@@ -230,11 +231,15 @@ const session = (email) => ({
   );
   await button("Needs resolution").click();
   await button("Open debt: Question this taxi").waitFor();
-  await button("All debts").click();
+  await tab("People");
+  await expect(button("Open person carol@example.com")).toBeVisible();
+  await expect(button("Open person sam@example.com")).toBeVisible();
   await tab("Vaults");
   await page
     .getByText("Account vaults are not available yet", { exact: true })
     .waitFor();
+  await tab("Vaults");
+  await expect(button("Choose device-only mode")).toBeVisible();
   await button("Choose device-only mode").click();
   await button("Use offline — free").click();
   await page
@@ -369,7 +374,7 @@ const session = (email) => ({
     fullPage: true,
   });
   console.log(
-    "PASS mocked account tabs: wrong OTP, accepted/disputed actions, shared detail freshness, explicit all-requests navigation, honest vaults, persistence/refresh, failed sign-out and stale-account isolation. No real emails sent.",
+    "PASS mocked account tabs: wrong OTP, accepted/disputed actions, People and Vaults root taps, explicit all-requests navigation, honest vaults, persistence/refresh, failed sign-out and stale-account isolation. No real emails sent.",
   );
   await browser.close();
 })().catch((e) => {

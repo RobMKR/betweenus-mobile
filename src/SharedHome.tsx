@@ -93,6 +93,7 @@ function DebtHome({
   const [person, setPerson] = useState<string | null>(null);
   const [allRequests, setAllRequests] = useState(false);
   const [creating, setCreating] = useState(false);
+  const listRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -224,6 +225,19 @@ function DebtHome({
     setTab(next);
     setReason("");
     setError("");
+  }
+  function selectTab(next: Tab) {
+    if (creating) return;
+    if (next === "people") {
+      setDetails((current) => ({ ...current, people: null }));
+      setPerson(null);
+      setAllRequests(false);
+      setFilter("all");
+    }
+    if (next === "people" || next === "vaults") {
+      listRef.current?.scrollTo({ y: 0, animated: false });
+    }
+    navigate(next);
   }
   function openDebt(debt: Debt) {
     setDetail(debt);
@@ -422,7 +436,7 @@ function DebtHome({
     <>
       <MobileShell
         tab={tab}
-        onTabChange={navigate}
+        onTabChange={selectTab}
         mode={DEMO ? "LOCAL DEMO" : "ACCOUNT"}
       >
         <KeyboardAvoidingView
@@ -430,6 +444,7 @@ function DebtHome({
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <ScrollView
+            ref={listRef}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={s.page}
             refreshControl={
