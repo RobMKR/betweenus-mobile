@@ -35,6 +35,8 @@ import {
 import { createLedgerStore } from "./storage";
 import { Button, c, Choice, Field, s, Sheet } from "./ui";
 import OfflineOverview from "./OfflineOverview";
+import MemberPicker from "../vaults/MemberPicker";
+import { setVaultRoster, validateMemberIds } from "../vaults/roster";
 import PersonEditor from "../people/PersonEditor";
 import { savedPersonRecords } from "../people/records";
 import { SavedPeopleList, SavedPersonDetails } from "../people/PeopleViews";
@@ -45,7 +47,7 @@ import {
 } from "../people/model";
 import EventDateField from "./EventDateField";
 import { localCalendarDate } from "./eventDate";
-type Form = "record" | "vault" | "event" | "payment" | null;
+type Form = "record" | "vault" | "roster" | "event" | "payment" | null;
 const today = localCalendarDate;
 export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const listRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
@@ -86,6 +88,8 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const [date, setDate] = useState(today);
   const [dateEditing, setDateEditing] = useState(false);
   const [personEditor, setPersonEditor] = useState(false);
+  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [personForRoster, setPersonForRoster] = useState(false);
   const [recordPersonId, setRecordPersonId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [direction, setDirection] = useState<"lent" | "borrowed">("lent");
@@ -166,6 +170,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     setNote("");
     setDirection("lent");
     setKind("temporary");
+    setMemberIds(next === "roster" ? [...(vault?.memberIds || [])] : []);
     if (next === "event" && vault?.events.length) {
       const previous = vault.events[vault.events.length - 1];
       setNames(previous.participants.map((p) => p.name).join("\n"));
@@ -233,7 +238,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
       () => {
         success = true;
         setPersonEditor(false);
-        updatePath(() => ({ savedPersonId: person.id }));
+        if (personForRoster)
+          setMemberIds((previous) =>
+            previous.length < 100 ? [...previous, person.id] : previous,
+          );
+        else updatePath(() => ({ savedPersonId: person.id }));
       },
     );
     return success;
@@ -269,7 +278,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
       } else if (form === "vault") {
         const newVault = {
           id: id(),
-          title: text(name, "Vault title"),
+          title: text(name, "Vault title", 100),
+          memberIds: validateMemberIds(
+            memberIds,
+            savedPeople.map((person) => person.id),
+          ),
           kind,
           archived: false,
           events: [],
@@ -285,6 +298,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             setTab("vaults");
             setArchived(false);
           },
+        );
+      } else if (form === "roster" && vault) {
+        await save(
+          (current) => setVaultRoster(current, vault.id, memberIds),
+          () => setForm(null),
         );
       } else if (form === "event" && vault) {
         const next = createEvent({
@@ -399,6 +417,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     ? {
         record: "Add a personal record",
         vault: "Create a vault",
+        roster: "Manage vault members",
         event: "Add an event expense",
         payment: "Record a payment",
       }[form]
@@ -560,6 +579,41 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 title="Add event expense"
                 disabled={busy}
                 onPress={() => openForm("event")}
+              />
+            )}
+            <Text style={s.section}>
+              Vault members · {vault.memberIds?.length || 0}
+            </Text>
+            <Text style={s.small}>
+              You own this vault. You are included separately when choosing
+              event participants. Membership does not invite anyone or grant
+              access.
+            </Text>
+            {vault.memberIds === undefined && (
+              <Text style={s.body}>
+                This earlier vault has no configured roster. Its event
+                participants remain unchanged.
+              </Text>
+            )}
+            {(vault.memberIds || []).map((memberId) => {
+              const member = savedPeople.find(
+                (person) => person.id === memberId,
+              )!;
+              return (
+                <View key={memberId} style={s.card}>
+                  <Text style={s.cardTitle}>{member.name}</Text>
+                  <Text style={s.small}>
+                    {member.email || member.phone || "Saved person"}
+                  </Text>
+                </View>
+              );
+            })}
+            {!vault.archived && (
+              <Button
+                title="Manage members"
+                secondary
+                disabled={busy}
+                onPress={() => openForm("roster")}
               />
             )}
             <Text style={s.section}>
@@ -740,6 +794,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                   disabled={!ready || busy}
                   onAdd={() => {
                     setError("");
+                    setPersonForRoster(false);
                     setPersonEditor(true);
                   }}
                   onSelect={(savedPersonId) =>
@@ -904,10 +959,19 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
         visible={personEditor}
         onClose={() => setPersonEditor(false)}
         onSave={addPerson}
+        note={
+          personForRoster
+            ? "Saving this person keeps them in People even if you cancel the vault form."
+            : undefined
+        }
         busy={busy}
         error={error}
       />
-      <Sheet visible={!!form} title={sheetTitle} onClose={close}>
+      <Sheet
+        visible={!!form && !personEditor}
+        title={sheetTitle}
+        onClose={close}
+      >
         {form === "record" && (
           <>
             <Text style={s.body}>
@@ -960,7 +1024,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
               value={name}
               onChangeText={setName}
               placeholder="Friday football, Summer trip…"
-              maxLength={200}
+              maxLength={100}
             />
             <View style={s.row}>
               <Choice
@@ -979,6 +1043,25 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 ? "Keep a reusable home for recurring events. Each event has its own date, payer, split and repayments."
                 : "For a trip, match, or short-lived plan. Add one or more events, then archive when you are done. Nothing is automatically deleted."}
             </Text>
+          </>
+        )}
+        {(form === "vault" || form === "roster") && (
+          <>
+            <Text style={s.body}>
+              Choose a reusable candidate roster. Events can include only some
+              members, or other saved people. Saving a new person keeps them in
+              People even if you cancel this vault form.
+            </Text>
+            <MemberPicker
+              people={savedPeople}
+              selectedIds={memberIds}
+              onChange={setMemberIds}
+              disabled={busy}
+              onAddPerson={() => {
+                setPersonForRoster(true);
+                setPersonEditor(true);
+              }}
+            />
           </>
         )}
         {form === "event" && (
@@ -1091,9 +1174,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                     ? "Save payment"
                     : form === "event"
                       ? "Save event expense"
-                      : form === "vault"
-                        ? "Save vault"
-                        : "Save personal record"
+                      : form === "roster"
+                        ? "Save members"
+                        : form === "vault"
+                          ? "Save vault"
+                          : "Save personal record"
             }
             disabled={busy || (form === "event" && dateEditing)}
             onPress={() => void submit()}

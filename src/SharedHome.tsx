@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { amountToMinor, Balance, Debt, DEMO, money, request } from "./api";
 import AuthGate from "./AuthGate";
 import MobileShell, { Tab } from "./navigation/MobileShell";
+import AccountVaults from "./vaults/AccountVaults";
 import PersonEditor from "./people/PersonEditor";
 import { SavedPeopleList, SavedPersonDetails } from "./people/PeopleViews";
 import {
@@ -94,6 +95,8 @@ function DebtHome({
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [tab, setTab] = useState<Tab>("home");
+  const [vaultRootRevision, setVaultRootRevision] = useState(0);
+  const [vaultCreateRevision, setVaultCreateRevision] = useState(0);
   const [details, setDetails] = useState<{
     home: string | null;
     people: string | null;
@@ -303,6 +306,8 @@ function DebtHome({
   }
   function selectTab(next: Tab) {
     if (creating) return;
+    setVaultCreateRevision(0);
+    if (next === "vaults") setVaultRootRevision((value) => value + 1);
     if (next === "people") {
       setSavedId(null);
       setDetails((current) => ({ ...current, people: null }));
@@ -597,7 +602,10 @@ function DebtHome({
                   {button("Add debt", () => startCreate(), false, busy || !me)}
                   {button(
                     "Create vault",
-                    () => navigate("vaults"),
+                    () => {
+                      setVaultCreateRevision((value) => value + 1);
+                      navigate("vaults");
+                    },
                     true,
                     false,
                   )}
@@ -793,26 +801,20 @@ function DebtHome({
                 </>
               )
             ) : tab === "vaults" ? (
-              <>
-                <Text style={s.title}>Vaults</Text>
-                <View style={s.card}>
-                  <Ionicons
-                    name="albums-outline"
-                    size={30}
-                    color={colors.green}
-                  />
-                  <Text style={s.sectionTitle}>
-                    Account vaults are not available yet
-                  </Text>
-                  <Text style={s.body}>
-                    Shared account vaults are not supported by this pilot.
-                    Device-only mode has local vaults stored on this device;
-                    those records are not synced to your account.
-                  </Text>
-                  {onExit &&
-                    button("Choose device-only mode", onExit, true, false)}
-                </View>
-              </>
+              <AccountVaults
+                token={token}
+                ownerId={owner}
+                people={savedPeople}
+                onPersonCreated={(person) =>
+                  setSavedPeople((previous) =>
+                    previous.some((item) => item.id === person.id)
+                      ? previous
+                      : [...previous, person],
+                  )
+                }
+                rootRevision={vaultRootRevision}
+                createRevision={vaultCreateRevision}
+              />
             ) : (
               <>
                 <Text style={s.title}>Settings</Text>

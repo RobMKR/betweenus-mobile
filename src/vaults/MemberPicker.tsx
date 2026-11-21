@@ -37,6 +37,7 @@ export default function MemberPicker({
             accessibilityRole="checkbox"
             accessibilityLabel={`${person.name}, ${description}, saved person ${index + 1}`}
             accessibilityState={{ checked, disabled: blocked }}
+            aria-checked={checked}
             disabled={blocked}
             onPress={() =>
               onChange(
