@@ -24,7 +24,7 @@
 
 ## Evidence and handoff
 
-- Run focused tests for the changed behavior, including meaningful failure cases. Do not add tests that merely repeat implementation details. CI currently runs `npm test`, `npm run typecheck` and `npm run export`; see [CONTRIBUTING.md](CONTRIBUTING.md) for setup and scoped smoke checks.
+- Run focused tests for the changed behavior, including meaningful failure cases. Do not add tests that merely repeat implementation details. CI currently runs `npm test`, `npm run typecheck`, `npm run export` and secret-free publishing bridge tests; see [CONTRIBUTING.md](CONTRIBUTING.md) for setup and scoped smoke checks.
 - Report commands, results and material gaps accurately. A web export or browser smoke is not native-device evidence. For mobile UI changes, record viewport and platform tested, and flag real-device verification still needed.
 - Use [.agents/skills/review-pr/SKILL.md](.agents/skills/review-pr/SKILL.md) for independent review. Read it explicitly if skill auto-discovery is unavailable. PRs should explain behavior, why it changes, validation, and data/platform risks.
-- Unattended issue dispatch and automatic agent review are not configured. Existing CI does not implement that workflow. Deployments, EAS builds and publishing remain manual; this file does not provision automation or authorize a deployment.
+- Unattended issue dispatch and automatic agent execution/review are not configured. The [manual publishing bridge](docs/session-publishing.md) can publish already-completed session work through App identities; it does not run agents or establish independent review. CI runs checks, not agent dispatch. Merges, deployments and EAS builds remain separate authorized manual steps.

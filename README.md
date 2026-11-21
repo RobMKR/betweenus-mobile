@@ -4,7 +4,7 @@ Expo Router + React Native + TypeScript app for iOS, Android and a web preview. 
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue-to-PR workflow, [AGENTS.md](AGENTS.md) for engineering standards, and the [independent review playbook](.agents/skills/review-pr/SKILL.md). Agent dispatch/review automation is not configured; deployments remain manual.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue-to-PR workflow, [AGENTS.md](AGENTS.md) for engineering standards, and the [independent review playbook](.agents/skills/review-pr/SKILL.md). The [manual App publishing bridge](docs/session-publishing.md) posts completed session work without AI API execution or billing. Unattended dispatch/agent review is not configured; deployments remain manual.
 
 ## Free offline mode
 

@@ -16,3 +16,16 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: http://localhost:3001
           EXPO_PUBLIC_DEMO_MODE: "false"
+
+  publishing-bridge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test --test-isolation=none .github/bridge/session-bridge.test.mjs

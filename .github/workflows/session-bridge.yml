@@ -1,0 +1,96 @@
+name: Session agent publishing bridge
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Publishing operation (no AI execution)
+        type: choice
+        options: [auth-check, create-pr, review]
+        default: auth-check
+        required: true
+      branch:
+        description: Already pushed same-repository branch (create-pr)
+        type: string
+      sha:
+        description: Expected full lowercase head SHA (create-pr/review)
+        type: string
+      issue:
+        description: Open issue number (create-pr)
+        type: string
+      title:
+        description: PR title (create-pr)
+        type: string
+      body:
+        description: Actual session-authored PR or independent review text
+        type: string
+      pr:
+        description: Existing PR number (review)
+        type: string
+      verdict:
+        description: Independent session reviewer verdict
+        type: choice
+        options: [COMMENT, REQUEST_CHANGES, APPROVE]
+        default: COMMENT
+permissions:
+  contents: read
+concurrency:
+  group: session-agent-bridge-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BRIDGE_INPUTS: ${{ toJSON(inputs) }}
+      GH_REPOSITORY: ${{ github.repository }}
+      GH_REF: ${{ github.ref }}
+      GH_SHA: ${{ github.sha }}
+      GH_EVENT_NAME: ${{ github.event_name }}
+      GH_ACTOR: ${{ github.actor }}
+      GH_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate trusted ref, maintainers and inputs before App credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/bridge/session-bridge.mjs preflight
+      - name: Mint repository-scoped Worker token
+        if: inputs.action == 'auth-check' || inputs.action == 'create-pr'
+        id: worker
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
+        with:
+          app-id: ${{ secrets.WORKER_APP_ID }}
+          private-key: ${{ secrets.WORKER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: write
+      - name: Mint repository-scoped Reviewer token
+        if: inputs.action == 'auth-check' || inputs.action == 'review'
+        id: reviewer
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2.1.4
+        with:
+          app-id: ${{ secrets.REVIEWER_APP_ID }}
+          private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
+          permission-actions: read
+          permission-pull-requests: write
+      - name: Publish supplied session result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKER_TOKEN: ${{ steps.worker.outputs.token }}
+          REVIEWER_TOKEN: ${{ steps.reviewer.outputs.token }}
+          WORKER_APP_ID: ${{ secrets.WORKER_APP_ID }}
+          REVIEWER_APP_ID: ${{ secrets.REVIEWER_APP_ID }}
+          WORKER_SLUG: ${{ steps.worker.outputs.app-slug }}
+          REVIEWER_SLUG: ${{ steps.reviewer.outputs.app-slug }}
+          WORKER_INSTALLATION: ${{ steps.worker.outputs.installation-id }}
+          REVIEWER_INSTALLATION: ${{ steps.reviewer.outputs.installation-id }}
+        run: node .github/bridge/session-bridge.mjs run
