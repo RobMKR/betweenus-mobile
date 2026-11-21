@@ -1,16 +1,22 @@
 ## Problem and resulting behavior
 
-Explain the user-visible change and why it is needed.
+Explain the change against the canonical issue specification, including any scope changes already recorded there.
 
 Closes #<issue>
 
-## Validation
+## Acceptance criteria and evidence
 
-List commands/results and relevant failure-case evidence. For UI, name the platform, viewport/device and OS actually tested. State remaining real-device checks; browser tests do not establish native behavior.
+Map each issue criterion to the change and actual check/result. For a small fix, one concise row or bullet is enough.
 
-## Data, security and platform impact
+| Criterion | Implementation   | Verification/result and limitations         |
+| --------- | ---------------- | ------------------------------------------- |
+| AC1       | What fulfills it | Command, behavior evidence or remaining gap |
 
-Describe persistence/schema compatibility, money/auth/offline or dependency implications and any migration/recovery plan. Write "none" if not affected.
+For UI, name the platform, viewport/device and OS actually tested. State remaining real-device checks; browser tests do not establish native behavior. Separate checks run from checks planned.
+
+## Relevant impact and decisions
+
+Describe affected UX/states/accessibility, offline/network, money/auth/API or saved-data compatibility and recovery; include dependency/native impact only when relevant. Omit unrelated detail. Link resolved scope decisions in the issue and state any remaining material blockers or non-blocking assumptions.
 
 ## Review handoff
 
@@ -18,4 +24,4 @@ Describe persistence/schema compatibility, money/auth/offline or dependency impl
 - Latest head SHA and CI: <!-- reviewer verifies immediately before merge -->
 - Remaining limitations or unresolved findings:
 
-Use [the review playbook](https://github.com/RobMKR/betweenus-mobile/blob/main/.agents/skills/review-pr/SKILL.md). New commits require review of the new head. Merge only after blocking findings are resolved and applicable CI passes; deployment remains a separate manual action.
+Use [the review playbook](https://github.com/betweenus-tech/betweenus-mobile/blob/main/.agents/skills/review-pr/SKILL.md). Review against the issue criteria, not just a passing suite. New commits require review of the new head. Merge only after blocking findings are resolved and applicable CI passes; deployment remains a separate manual action.

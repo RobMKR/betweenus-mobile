@@ -2,9 +2,13 @@
 
 Expo Router + React Native + TypeScript app for iOS, Android and a web preview. A restrained shared-debt record for friends and family. Pairs with the independent `betweenus-api` repository.
 
-## Contributing
+## Spec-driven development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue-to-PR workflow, [AGENTS.md](AGENTS.md) for engineering standards, and the [independent review playbook](.agents/skills/review-pr/SKILL.md). The [manual App publishing bridge](docs/session-publishing.md) posts completed session work without AI API execution or billing. Unattended dispatch/agent review is not configured; deployments remain manual.
+**The development issue is the canonical implementation specification.** Work moves from issue/spec → isolated issue branch/worktree → independent latest-head review → passing applicable CI → authorized merge. State the problem, desired behavior and useful examples, scope, numbered acceptance criteria (AC1, AC2, …), relevant constraints/contracts, verification and unresolved decisions before dependent implementation. Scale detail to risk: a small fix can be a few lines with one criterion and a check; unused sections can be omitted or marked not applicable.
+
+Sol inspects the existing repository and resolves material ambiguity before the work that depends on it. Repository/source evidence constrains interpretation. Record non-blocking assumptions and continue independent work; do not silently invent product or data behavior. If scope or acceptance criteria materially change, update the issue before implementing the change. The PR maps each criterion to the change and actual verification evidence; Astra independently reviews the latest SHA against that issue and applicable CI.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the practical workflow, the [issue template](.github/ISSUE_TEMPLATE/change.md), [PR template](.github/pull_request_template.md), [AGENTS.md](AGENTS.md) and the [review playbook](.agents/skills/review-pr/SKILL.md). The [manual App publishing bridge](docs/session-publishing.md) posts completed session work without AI API execution or billing. Unattended dispatch/agent review is not configured; deployments remain manual.
 
 ## Free offline mode
 

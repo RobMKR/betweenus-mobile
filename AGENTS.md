@@ -3,10 +3,18 @@
 ## Ownership and delivery
 
 - Sol implements code and tests. Astra manages scope and independently reviews the final change. Never self-approve; author and reviewer must be distinct agents or people.
-- Start from a GitHub issue with a concrete outcome and acceptance criteria. Work from current `origin/main` in an isolated feature branch/worktree, then open a PR linking the issue. Do not push implementation directly to `main`.
+- Start from a GitHub issue as the canonical implementation specification, with a concrete outcome and numbered acceptance criteria. Work from current `origin/main` in an isolated feature branch/worktree, then open a PR linking the issue. Do not push implementation directly to `main`.
 - One writer per workspace. Parallel work needs explicit, non-overlapping file ownership and separate workspaces; do not switch another worker's branch or commit their unfinished files. Review from a clean checkout of the PR's latest head SHA.
 - Keep changes focused. Prefer small, clear functions and existing Expo/React Native patterns. Add abstractions only for a demonstrated need. Fix the underlying cause without unrelated cleanup or speculative features.
 - Before merge: independent review of the latest SHA, resolved blocking findings, and passing applicable CI on that SHA. New commits invalidate the previous review. These are team gates; do not claim GitHub branch protection enforces them unless verified.
+
+## Specification before dependent implementation
+
+- Read the current issue specification and inspect the relevant existing code, tests and contracts before planning a change. Repository/source evidence constrains interpretation of the issue; call out conflicts rather than silently changing the requested outcome.
+- Keep the issue proportionate: problem, desired behavior/examples, scope and exclusions, numbered criteria (AC1, AC2, …), relevant constraints/contracts/data impact, verification and unresolved decisions. A simple fix needs only concise applicable details, not a full design document or every template section.
+- Clarify material ambiguity before implementation that depends on it, especially money, navigation/state, identity, offline/network and saved-data behavior. Record non-blocking assumptions and continue independent work. Separate blocking decisions from optional preferences.
+- Update the canonical issue before implementing material changes to scope, behavior or acceptance criteria. Keep useful rationale there; do not let a chat plan or PR silently replace the agreed specification.
+- Map implementation and focused verification to the issue criteria in the PR. Astra reviews those criteria, evidence and remaining limitations on the latest SHA; a passing test suite alone does not establish the requested behavior.
 
 ## Mobile product quality
 
