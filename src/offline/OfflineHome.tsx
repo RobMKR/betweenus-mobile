@@ -35,6 +35,14 @@ import {
 import { createLedgerStore } from "./storage";
 import { Button, c, Choice, Field, s, Sheet } from "./ui";
 import OfflineOverview from "./OfflineOverview";
+import PersonEditor from "../people/PersonEditor";
+import { savedPersonRecords } from "../people/records";
+import { SavedPeopleList, SavedPersonDetails } from "../people/PeopleViews";
+import {
+  personFields,
+  type SavedPerson,
+  type PersonInput,
+} from "../people/model";
 import EventDateField from "./EventDateField";
 import { localCalendarDate } from "./eventDate";
 type Form = "record" | "vault" | "event" | "payment" | null;
@@ -77,6 +85,8 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(today);
   const [dateEditing, setDateEditing] = useState(false);
+  const [personEditor, setPersonEditor] = useState(false);
+  const [recordPersonId, setRecordPersonId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [direction, setDirection] = useState<"lent" | "borrowed">("lent");
   const [kind, setKind] = useState<"temporary" | "permanent">("temporary");
@@ -87,8 +97,15 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const vault = ledger.vaults.find((v) => v.id === vaultId);
   const event = vault?.events.find((e) => e.id === eventId);
   const person = event?.participants.find((p) => p.id === personId);
-  const people = localPeople(ledger.records);
+  const savedPeople = ledger.people || [];
+  const selectedSavedPerson = savedPeople.find(
+    (p) => p.id === path.savedPersonId,
+  );
+  const people = localPeople(
+    ledger.records.filter((record) => !record.personId),
+  );
   const selectedPerson = people.find((p) => p.key === path.personKey);
+  const linked = savedPersonRecords(ledger.records, selectedSavedPerson?.id);
   const lines = names
     .split("\n")
     .map((n) => n.trim())
@@ -139,9 +156,10 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
       if (active.current) setBusy(false);
     }
   }
-  function openForm(next: Form) {
+  function openForm(next: Form, forPerson?: SavedPerson) {
     setError("");
-    setName("");
+    setName(forPerson?.name || "");
+    setRecordPersonId(forPerson?.id || null);
     setAmount("");
     setDate(today());
     setDateEditing(false);
@@ -165,6 +183,10 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   function close() {
     if (busy) return;
     setError("");
+    if (personEditor) {
+      setPersonEditor(false);
+      return;
+    }
     if (form) {
       setDateEditing(false);
       setForm(null);
@@ -178,7 +200,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
       "hardwareBackPress",
       () => {
         if (busy) return true;
-        if (form) return false;
+        if (form || personEditor) return false;
         const parent = backPath(path);
         if (parent) {
           setError("");
@@ -193,7 +215,29 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
       },
     );
     return () => subscription.remove();
-  }, [tab, path, form, busy]);
+  }, [tab, path, form, busy, personEditor]);
+  async function addPerson(input: PersonInput) {
+    const fields = personFields(input);
+    const person: SavedPerson = {
+      id: id(),
+      createdAt: new Date().toISOString(),
+      ...fields,
+    };
+    let success = false;
+    await save(
+      (current) => ({
+        ...current,
+        version: 2,
+        people: [...(current.people || []), person],
+      }),
+      () => {
+        success = true;
+        setPersonEditor(false);
+        updatePath(() => ({ savedPersonId: person.id }));
+      },
+    );
+    return success;
+  }
   function minor() {
     const value = amountToMinor(amount);
     if (value === null)
@@ -205,7 +249,8 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
       if (form === "record") {
         const newRecord: LocalRecord = {
           id: id(),
-          name: text(name, "Name", 80),
+          name: text(name, "Name", 100),
+          ...(recordPersonId ? { personId: recordPersonId } : {}),
           direction,
           amountMinor: minor(),
           date: validDate(date),
@@ -460,7 +505,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             <Text style={s.link}>
               ‹{" "}
               {record
-                ? selectedPerson
+                ? selectedPerson || selectedSavedPerson
                   ? "Back to person"
                   : tab === "home"
                     ? "Back to Home"
@@ -649,7 +694,24 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
         )}
         {!hasDetails && tab === "people" && (
           <>
-            {selectedPerson ? (
+            {selectedSavedPerson ? (
+              <SavedPersonDetails
+                person={selectedSavedPerson}
+                onBack={close}
+                onDebt={() => openForm("record", selectedSavedPerson)}
+              >
+                <View style={[s.card, { backgroundColor: c.pale }]}>
+                  <Text style={s.label}>
+                    Owed to you · {money(linked.receivableMinor)}
+                  </Text>
+                  <Text style={s.label}>
+                    You owe · {money(linked.payableMinor)}
+                  </Text>
+                </View>
+                <Text style={s.section}>Personal records</Text>
+                {linked.records.map(recordRow)}
+              </SavedPersonDetails>
+            ) : selectedPerson ? (
               <>
                 <Pressable accessibilityRole="button" onPress={close}>
                   <Text style={s.link}>‹ Back to People</Text>
@@ -673,13 +735,19 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
               </>
             ) : (
               <>
+                <SavedPeopleList
+                  people={savedPeople}
+                  disabled={!ready || busy}
+                  onAdd={() => {
+                    setError("");
+                    setPersonEditor(true);
+                  }}
+                  onSelect={(savedPersonId) =>
+                    updatePath(() => ({ savedPersonId }))
+                  }
+                />
                 <View style={s.rowBetween}>
-                  <View>
-                    <Text style={s.title}>People</Text>
-                    <Text style={s.small}>
-                      Your personal records, together.
-                    </Text>
-                  </View>
+                  <Text style={s.section}>Earlier name groups</Text>
                   <Pressable
                     accessibilityRole="button"
                     disabled={!ready || busy}
@@ -737,8 +805,8 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                     <Ionicons name="people-outline" size={32} color={c.green} />
                     <Text style={s.cardTitle}>Start with someone you know</Text>
                     <Text style={[s.body, { textAlign: "center" }]}>
-                      Add a personal debt to see their records here. No contacts
-                      access or invitations.
+                      Earlier personal records stay here. They are not
+                      automatically linked to saved people.
                     </Text>
                   </View>
                 )}
@@ -832,6 +900,13 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
 
         {busy && ready && <ActivityIndicator color={c.green} />}
       </ScrollView>
+      <PersonEditor
+        visible={personEditor}
+        onClose={() => setPersonEditor(false)}
+        onSave={addPerson}
+        busy={busy}
+        error={error}
+      />
       <Sheet visible={!!form} title={sheetTitle} onClose={close}>
         {form === "record" && (
           <>
@@ -854,7 +929,8 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
               label="Person's name"
               value={name}
               onChangeText={setName}
-              maxLength={80}
+              maxLength={100}
+              editable={!recordPersonId}
             />
             <Field
               label="Amount · AED"

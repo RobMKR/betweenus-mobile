@@ -16,7 +16,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
         "backgroundColor": "#174E3D"
-      }
+      },
+      "blockedPermissions": ["android.permission.WRITE_CONTACTS"]
     },
     "web": {
       "bundler": "metro",
@@ -33,6 +34,12 @@
           "imageWidth": 144,
           "resizeMode": "contain",
           "backgroundColor": "#F7F8F3"
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Choose people to save in BetweenUs. Only selected contact details are kept."
         }
       ]
     ],

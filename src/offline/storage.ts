@@ -1,4 +1,4 @@
-import { emptyLedger, Ledger, validateLedger } from "./model";
+import { emptyLedger, Ledger, validateLedger, migrateLedger } from "./model";
 export const LEDGER_KEY = "betweenus.offline-ledger.v1";
 export interface Storage {
   getItem(key: string): Promise<string | null>;
@@ -12,7 +12,7 @@ export function createLedgerStore(storage: Storage) {
       const task = queue.then(async () => {
         const raw = await storage.getItem(LEDGER_KEY);
         const next =
-          raw === null ? emptyLedger() : validateLedger(JSON.parse(raw));
+          raw === null ? emptyLedger() : migrateLedger(JSON.parse(raw));
         ledger = next;
         return next;
       });

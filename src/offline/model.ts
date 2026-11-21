@@ -1,3 +1,4 @@
+import { validateSavedPerson, type SavedPerson } from "../people/model";
 /** Device-only ledger. Every amount is an integer AED minor unit. */
 export type Payment = {
   id: string;
@@ -14,6 +15,7 @@ export type LocalRecord = {
   date: string;
   note: string;
   payments: Payment[];
+  personId?: string;
 };
 export type Event = {
   id: string;
@@ -31,9 +33,15 @@ export type Vault = {
   archived: boolean;
   events: Event[];
 };
-export type Ledger = { version: 1; records: LocalRecord[]; vaults: Vault[] };
+export type Ledger = {
+  version: 1 | 2;
+  records: LocalRecord[];
+  vaults: Vault[];
+  people?: SavedPerson[];
+};
 export const emptyLedger = (): Ledger => ({
-  version: 1,
+  version: 2,
+  people: [],
   records: [],
   vaults: [],
 });
@@ -286,11 +294,21 @@ export function validateLedger(value: unknown): Ledger {
   const data = value as Ledger;
   if (
     !data ||
-    data.version !== 1 ||
+    ![1, 2].includes(data.version) ||
     !Array.isArray(data.records) ||
     !Array.isArray(data.vaults)
   )
     throw new Error("Unsupported or damaged local records.");
+  if (data.version === 1 && data.people !== undefined)
+    throw new Error("Unsupported legacy People data.");
+  if (data.version === 2 && !Array.isArray(data.people))
+    throw new Error("Invalid saved People data.");
+  const personIds = new Set<string>();
+  for (const person of data.people || []) {
+    validateSavedPerson(person);
+    if (personIds.has(person.id)) throw new Error("Duplicate saved person ID.");
+    personIds.add(person.id);
+  }
   const ids = new Set<string>();
   function unique(value: string) {
     text(value, "Record ID");
@@ -299,7 +317,12 @@ export function validateLedger(value: unknown): Ledger {
   }
   for (const r of data.records) {
     unique(r.id);
-    text(r.name, "Name", 80);
+    text(r.name, "Name", 100);
+    if (
+      r.personId !== undefined &&
+      (typeof r.personId !== "string" || !personIds.has(r.personId))
+    )
+      throw new Error("Saved person link is invalid.");
     if (
       !["lent", "borrowed"].includes(r.direction) ||
       typeof r.note !== "string" ||
@@ -356,4 +379,10 @@ export function validateLedger(value: unknown): Ledger {
     }
   }
   return data;
+}
+
+/** Read-only upgrade; the original v1 disk value is retained until a successful write. */
+export function migrateLedger(value: unknown): Ledger {
+  const data = validateLedger(value);
+  return data.version === 1 ? { ...data, version: 2, people: [] } : data;
 }

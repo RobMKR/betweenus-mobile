@@ -91,7 +91,10 @@ test("new dates persist as strings while existing event dates/repayments/archive
     },
   });
   const loaded = await store.load();
-  assert.deepEqual(loaded, initial);
+  assert.equal(loaded.version, 2);
+  assert.deepEqual(loaded.records, initial.records);
+  assert.deepEqual(loaded.vaults, initial.vaults);
+  assert.deepEqual(loaded.people, []);
   const next = createEvent({
     title: "Next match",
     date: "2028-02-29",
