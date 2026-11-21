@@ -429,7 +429,12 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     <MobileShell
       tab={tab}
       onTabChange={(next) => {
-        if (busy) return;
+        if (busy || form) return;
+        if (next === "people" || next === "vaults") {
+          setPaths((current) => ({ ...current, [next]: {} }));
+          if (next === "vaults") setArchived(false);
+          listRef.current?.scrollTo({ y: 0, animated: false });
+        }
         setError("");
         setTab(next);
       }}

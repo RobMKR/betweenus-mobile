@@ -75,7 +75,15 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
   });
   await tab("Home");
   await tab("Vaults");
-  await page.getByText("Pitch booking", { exact: true }).waitFor();
+  await expect(button("Active vaults")).toBeVisible();
+  await expect(page.getByText("Pitch booking", { exact: true })).toHaveCount(0);
+  await page.getByText("Friday football", { exact: true }).click();
+  await page.getByText("Pitch booking", { exact: true }).click();
+  await tab("Vaults");
+  await expect(button("Active vaults")).toBeVisible();
+  await expect(button("‹ Back to vault")).toHaveCount(0);
+  await page.getByText("Friday football", { exact: true }).click();
+  await page.getByText("Pitch booking", { exact: true }).click();
   await button("Record payment · Player 1").click();
   await page.getByLabel("Payment amount · AED", { exact: true }).fill("46");
   await button("Save payment").click();
@@ -103,6 +111,14 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
     .filter({ hasText: "AED 540.00" })
     .waitFor();
   await tab("Vaults");
+  await button("Archived vaults").click();
+  await expect(
+    page.getByText("Friday football", { exact: true }),
+  ).toBeVisible();
+  await tab("Vaults");
+  await expect(page.getByText("Friday football", { exact: true })).toHaveCount(
+    0,
+  );
   await button("Archived vaults").click();
   await page.getByText("Friday football", { exact: true }).click();
   await button("Reactivate vault").click();
@@ -138,7 +154,13 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
   await page.getByText("AED 100.25", { exact: true }).waitFor();
   await tab("Settings");
   await tab("People");
-  await button("Record repayment").waitFor();
+  await expect(button("Record repayment")).toHaveCount(0);
+  await page.getByText("Sam", { exact: true }).click();
+  await page.getByText("A little help", { exact: true }).click();
+  await tab("People");
+  await expect(button("‹ Back to person")).toHaveCount(0);
+  await page.getByText("Sam", { exact: true }).click();
+  await page.getByText("A little help", { exact: true }).click();
   await page.evaluate(() => {
     window.__restoreStorageSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
@@ -218,7 +240,7 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
   assert.deepEqual(external, []);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS offline four tabs: football split/payments/undo, archive balances, multiple events, name grouping/directions, per-tab detail retention/back, mode/reload persistence, failed-write retry,320/430 no overflow, no external requests.",
+    "PASS offline four tabs: football split/payments/undo, archive balances, multiple events, name grouping/directions, People and Vaults root taps and detail back, mode/reload persistence, failed-write retry, 320/430 no overflow, no external requests.",
   );
   await browser.close();
 })().catch((e) => {
