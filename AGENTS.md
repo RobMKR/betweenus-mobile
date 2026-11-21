@@ -8,6 +8,18 @@
 - Keep changes focused. Prefer small, clear functions and existing Expo/React Native patterns. Add abstractions only for a demonstrated need. Fix the underlying cause without unrelated cleanup or speculative features.
 - Before merge: independent review of the latest SHA, resolved blocking findings, and passing applicable CI on that SHA. New commits invalidate the previous review. These are team gates; do not claim GitHub branch protection enforces them unless verified.
 
+## Bug report to merge
+
+Every distinct bug follows this seven-step lifecycle, including bugs discovered during implementation or review:
+
+1. The owner reports the bug to Astra; development/review discoveries are also brought to Astra.
+2. Astra immediately opens one issue per distinct bug **before handing off investigation or implementation**. Link an existing exact duplicate instead of opening another. Record observed symptoms, available reproduction steps, expected/actual behavior, platform/context and acceptance criteria. Mark unknown facts as unknown; optional missing details must not delay filing. Astra must not prescribe an unverified root cause or implementation.
+3. Astra delegates the issue to Sol in the session. Sol independently investigates the cause and implements the fix in an isolated issue branch/worktree. This is session delegation, not assignment to a presumed Sol GitHub account or an autonomous runner.
+4. Sol opens the linked PR through the existing Worker publishing bridge, with evidence against the issue criteria.
+5. Astra independently reviews the current PR head, behavior and evidence; Astra does not silently implement fixes while reviewing.
+6. Sol resolves review comments and updates the PR. Any newly discovered distinct bug is first filed or linked by Astra as in step 2, then delegated before its investigation/fix; a correction for the already-tracked bug uses that existing issue.
+7. Astra re-reviews the latest head, approves and merges only after blocking findings are resolved, applicable CI passes on that head and merge is authorized. New commits require another review; approval of an older head is insufficient.
+
 ## Specification before dependent implementation
 
 - Read the current issue specification and inspect the relevant existing code, tests and contracts before planning a change. Repository/source evidence constrains interpretation of the issue; call out conflicts rather than silently changing the requested outcome.

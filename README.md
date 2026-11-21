@@ -8,6 +8,8 @@ Expo Router + React Native + TypeScript app for iOS, Android and a web preview. 
 
 Sol inspects the existing repository and resolves material ambiguity before the work that depends on it. Repository/source evidence constrains interpretation. Record non-blocking assumptions and continue independent work; do not silently invent product or data behavior. If scope or acceptance criteria materially change, update the issue before implementing the change. The PR maps each criterion to the change and actual verification evidence; Astra independently reviews the latest SHA against that issue and applicable CI.
 
+For bugs, including defects found during implementation/review: report to Astra → Astra immediately files one issue per distinct bug (or links an exact duplicate) → delegates Sol to independently investigate/fix → Sol opens the linked PR → Astra reviews → Sol resolves comments → Astra re-reviews the latest head, approves and merges after passing CI and authorization. Filing records symptoms and expected behavior, not an unverified prescribed cause; optional missing details do not delay it. See the [seven-step bug lifecycle](AGENTS.md#bug-report-to-merge).
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the practical workflow, the [issue template](.github/ISSUE_TEMPLATE/change.md), [PR template](.github/pull_request_template.md), [AGENTS.md](AGENTS.md) and the [review playbook](.agents/skills/review-pr/SKILL.md). The [manual App publishing bridge](docs/session-publishing.md) posts completed session work without AI API execution or billing. Unattended dispatch/agent review is not configured; deployments remain manual.
 
 ## Mobile navigation

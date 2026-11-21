@@ -2,6 +2,12 @@
 
 Read [AGENTS.md](AGENTS.md) before changing the repository. Sol implements; Astra manages scope and independently reviews. The [review playbook](.agents/skills/review-pr/SKILL.md) can be read directly even if your runner has no skill discovery.
 
+## Bug intake and roles
+
+The bug lifecycle is: report to Astra → Astra immediately files/reuses the exact bug issue → Astra delegates and Sol independently investigates/implements → Sol opens a linked PR → Astra reviews → Sol resolves comments → Astra re-reviews the latest head, approves and merges after passing CI and authorization. See [AGENTS.md](AGENTS.md#bug-report-to-merge) for the seven steps.
+
+This also applies to each distinct bug found during development or review: file or link its issue before investigation/implementation handoff, rather than bundling an untracked fix. Filing captures observed symptoms, available reproduction, expected/actual behavior, platform/context and acceptance criteria; unknown facts stay unknown. Optional missing details do not delay filing, and Astra does not prescribe an unverified diagnosis or implementation. Delegation happens in the current session, not through an assumed Sol account or unattended agent.
+
 ## Write the issue specification
 
 The development issue is the canonical implementation specification. Before dependent implementation, inspect the existing code, tests and contracts and capture the applicable details:
@@ -20,7 +26,7 @@ Source evidence constrains interpretation. Clarify conflicts and material unknow
 1. Select the issue and confirm its applicable specification is sufficient. Create an isolated branch/worktree from current `origin/main`; assign one writer to that workspace.
 2. Implement the agreed criteria with focused behavior/failure-case evidence. Keep unrelated changes and credentials out of the branch; update the issue first if material scope changes.
 3. Prepare a PR linking the canonical issue (`Closes #<number>` when complete). Map each criterion to its implementation and actual verification result using the [PR template](.github/pull_request_template.md), including gaps and platform limitations. Use the Worker publishing bridge for session work; preserve truthful Sol attribution.
-4. Astra independently reviews the latest head SHA against the issue, the diff and evidence. Resolve blocking findings and pass applicable CI, then repeat review for new commits. Merge only after those manual team gates; do not push implementation directly to `main`.
+4. Astra independently reviews the latest head SHA against the issue, the diff and evidence. Sol resolves comments; Astra re-reviews new commits, then approves and merges only after blocking findings are resolved, applicable exact-head CI passes and merge is authorized; do not push implementation directly to `main`.
 
 The [manual session publishing bridge](docs/session-publishing.md) publishes already-pushed Sol work and supplied real Astra reviews through App identities. It does not execute AI models, create an unattended dispatcher, merge, or deploy. CI currently runs on pushes and PRs. Unattended issue dispatch and automated agent execution/review are **not configured**; branch protection is not established by these documents. The publishing bridge is tracked in [betweenus-api#2](https://github.com/betweenus-tech/betweenus-api/issues/2). The mobile UX redesign, including navigation work, is tracked separately in [mobile#2](https://github.com/betweenus-tech/betweenus-mobile/issues/2); standards are not permission to include that redesign in unrelated PRs. Deployments, EAS builds and publishing remain manual and require task authorization.
 
