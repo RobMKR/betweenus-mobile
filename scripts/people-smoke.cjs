@@ -191,6 +191,8 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
     }
   }, session("alice@example.com"));
   const people = [];
+  let heldCreate = null;
+  let holdCreate = true;
   let hold = false,
     held = null,
     fail = false;
@@ -238,6 +240,10 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
           createdAt: new Date().toISOString(),
         };
         people.push(person);
+        if (holdCreate) {
+          heldCreate = { route, person };
+          return;
+        }
         return json({ person }, 201);
       }
       if (id === owner && hold) {
@@ -255,6 +261,17 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
     await account.getByRole("dialog").waitFor({ state: "hidden" });
     await account.getByRole("tab", { name, exact: true }).click();
   };
+  let refreshNumber = 0;
+  const refreshSameOwner = async () => {
+    const next = session("alice@example.com");
+    next.access_token += `refresh${++refreshNumber}`;
+    await account.evaluate(async (data) => {
+      const channel = new BroadcastChannel("betweenus-auth-session");
+      channel.postMessage({ event: "TOKEN_REFRESHED", session: data });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      channel.close();
+    }, next);
+  };
   await account.goto(accountURL);
   await at("People");
   await ab("+ Add person").click();
@@ -262,7 +279,22 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   await account
     .getByLabel("Email · optional", { exact: true })
     .fill("BORROWER@example.com");
+  await refreshSameOwner();
+  await expect(account.getByLabel("Person name", { exact: true })).toHaveValue(
+    "Account Sam",
+  );
+  await expect(
+    account.getByLabel("Email · optional", { exact: true }),
+  ).toHaveValue("BORROWER@example.com");
   await ab("Save person").click();
+  await expect.poll(() => !!heldCreate).toBe(true);
+  await refreshSameOwner();
+  await heldCreate.route.fulfill({
+    status: 201,
+    contentType: "application/json",
+    body: JSON.stringify({ person: heldCreate.person }),
+  });
+  holdCreate = false;
   await account.getByRole("dialog").waitFor({ state: "hidden" });
   await account.getByText("borrower@example.com", { exact: true }).waitFor();
   await ab("Add debt for this person").click();
@@ -271,6 +303,13 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   ).toHaveValue("borrower@example.com");
   await account.getByLabel("Close", { exact: true }).click();
   await account.getByRole("dialog").waitFor({ state: "hidden" });
+  await at("Home");
+  await ab("Add debt").click();
+  await expect(
+    account.getByLabel("Borrower email", { exact: true }),
+  ).toHaveValue("");
+  await account.getByLabel("Close", { exact: true }).click();
+  await at("People");
   await ab("‹ Back to People").click();
   await account.screenshot({
     path: "/tmp/betweenus-saved-people-account.png",

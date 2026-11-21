@@ -52,6 +52,7 @@ export default function Home({ onExit }: { onExit?: () => void }) {
         <DebtHome
           key={identity}
           accessToken={token}
+          ownerIdentity={identity}
           signOut={signOut}
           onExit={onExit}
         />
@@ -62,10 +63,12 @@ export default function Home({ onExit }: { onExit?: () => void }) {
 
 function DebtHome({
   accessToken = "",
+  ownerIdentity = "",
   signOut,
   onExit,
 }: {
   accessToken?: string;
+  ownerIdentity?: string;
   signOut?: () => Promise<void>;
   onExit?: () => void;
 }) {
@@ -80,6 +83,9 @@ function DebtHome({
   const token = DEMO ? `demo-${persona}` : accessToken;
   const requestIdentity = useRef(token);
   requestIdentity.current = token;
+  const owner = DEMO ? `demo-${persona}` : ownerIdentity;
+  const peopleOwner = useRef(owner);
+  peopleOwner.current = owner;
   const [me, setMe] = useState<{ id: string; email: string } | null>(null);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
@@ -108,19 +114,19 @@ function DebtHome({
   const [peopleError, setPeopleError] = useState("");
   const selectedSaved = savedPeople.find((p) => p.id === savedId);
   async function loadSavedPeople() {
-    const operationToken = token;
+    const operationOwner = owner;
     setPeopleLoading(true);
     setPeopleError("");
     try {
       const result = await request<{ people: SavedPerson[] }>("/people", token);
       const people = result.people.map(validateSavedPerson);
-      if (active.current && requestIdentity.current === operationToken)
+      if (active.current && peopleOwner.current === operationOwner)
         setSavedPeople(people);
     } catch (e) {
-      if (active.current && requestIdentity.current === operationToken)
+      if (active.current && peopleOwner.current === operationOwner)
         setPeopleError((e as Error).message);
     } finally {
-      if (active.current && requestIdentity.current === operationToken)
+      if (active.current && peopleOwner.current === operationOwner)
         setPeopleLoading(false);
     }
   }
@@ -130,10 +136,10 @@ function DebtHome({
     setPersonEditor(false);
     setPeopleCreating(false);
     void loadSavedPeople();
-  }, [token]);
+  }, [owner]);
   async function addSavedPerson(input: PersonInput) {
     const body = personRequest(input),
-      operationToken = token;
+      operationOwner = owner;
     setPeopleCreating(true);
     setPeopleError("");
     try {
@@ -143,7 +149,7 @@ function DebtHome({
         body,
       );
       const person = validateSavedPerson(result.person);
-      if (!active.current || requestIdentity.current !== operationToken)
+      if (!active.current || peopleOwner.current !== operationOwner)
         return false;
       setSavedPeople((previous) => [...previous, person]);
       setSavedId(person.id);
@@ -152,11 +158,11 @@ function DebtHome({
       setPersonEditor(false);
       return true;
     } catch (e) {
-      if (active.current && requestIdentity.current === operationToken)
+      if (active.current && peopleOwner.current === operationOwner)
         setPeopleError((e as Error).message);
       return false;
     } finally {
-      if (active.current && requestIdentity.current === operationToken)
+      if (active.current && peopleOwner.current === operationOwner)
         setPeopleCreating(false);
     }
   }
@@ -361,7 +367,10 @@ function DebtHome({
       </Pressable>
     );
   }
-  function startCreate() {
+  function startCreate(borrowerEmail = "") {
+    setEmail(borrowerEmail);
+    setAmount("");
+    setNote("");
     setError("");
     setCreating(true);
   }
@@ -584,7 +593,7 @@ function DebtHome({
                     </View>
                   ))}
                 <View style={s.shortcuts}>
-                  {button("Add debt", startCreate, false, busy || !me)}
+                  {button("Add debt", () => startCreate(), false, busy || !me)}
                   {button(
                     "Create vault",
                     () => navigate("vaults"),
@@ -621,8 +630,7 @@ function DebtHome({
                   person={selectedSaved}
                   onBack={() => setSavedId(null)}
                   onDebt={() => {
-                    setEmail(selectedSaved.email || "");
-                    startCreate();
+                    startCreate(selectedSaved.email || "");
                   }}
                 >
                   <Text style={s.small}>
@@ -696,7 +704,7 @@ function DebtHome({
                     Existing requests grouped by counterparty account or
                     invitation email.
                   </Text>
-                  {button("Add debt", startCreate, false, busy || !me)}
+                  {button("Add debt", () => startCreate(), false, busy || !me)}
                   {filters()}
                   {selected ? (
                     <>
