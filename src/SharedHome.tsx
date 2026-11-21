@@ -37,58 +37,37 @@ const labels = {
 };
 type Filter = "all" | "pending" | "accepted" | "disputed";
 export default function Home({ onExit }: { onExit?: () => void }) {
-  const [accountVisible, setAccountVisible] = useState(false);
   if (DEMO) return <DebtHome onExit={onExit} />;
   return (
-    <View style={{ flex: 1 }}>
-      {onExit && !accountVisible && (
-        <Pressable
-          onPress={onExit}
-          accessibilityRole="button"
-          style={{
-            minHeight: 44,
-            justifyContent: "center",
-            padding: 14,
-            backgroundColor: "#f7f8f3",
-          }}
-        >
-          <Text style={{ color: "#176b50" }}>‹ Mode selection</Text>
-        </Pressable>
+    <AuthGate onExit={onExit}>
+      {(token, signOut, identity) => (
+        <DebtHome
+          key={identity}
+          accessToken={token}
+          signOut={signOut}
+          onExit={onExit}
+        />
       )}
-      <AuthGate>
-        {(token, signOut, identity) => (
-          <DebtHome
-            key={identity}
-            accessToken={token}
-            onVisible={setAccountVisible}
-            signOut={signOut}
-            onExit={onExit}
-          />
-        )}
-      </AuthGate>
-    </View>
+    </AuthGate>
   );
 }
+
 function DebtHome({
   accessToken = "",
-  onVisible,
   signOut,
   onExit,
 }: {
   accessToken?: string;
-  onVisible?: (visible: boolean) => void;
   signOut?: () => Promise<void>;
   onExit?: () => void;
 }) {
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
-    onVisible?.(true);
     return () => {
       active.current = false;
-      onVisible?.(false);
     };
-  }, [onVisible]);
+  }, []);
   const [persona, setPersona] = useState<"lender" | "borrower">("lender");
   const token = DEMO ? `demo-${persona}` : accessToken;
   const requestIdentity = useRef(token);
