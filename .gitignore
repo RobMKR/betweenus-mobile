@@ -4,3 +4,4 @@ dist/
 .env
 *.log
 dist-auth/
+dist-offline/

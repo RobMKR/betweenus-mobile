@@ -2,29 +2,26 @@
 
 Expo Router + React Native + TypeScript app for iOS, Android and a web preview. A restrained shared-debt record for friends and family. Pairs with the independent `betweenus-api` repository.
 
-## Local pilot
+## Free offline mode
 
-Use Node 22+. Start the backend in its explicitly enabled local-demo mode first (see its README). The demo binds to loopback and uses ephemeral memory; no Postgres is required for this mode.
+Use Node 22+, run `npm ci`, then `npm run web` (or `npm run ios` / `npm run android` with a configured simulator). Choose **Use offline — free** on the first launch. No environment variables, backend, account, email or registration are needed. The selected mode is remembered on this device; **Switch mode** returns to the choice. Account code is lazy-loaded only after choosing account mode, so entering offline mode does not restore Supabase sessions or make auth/API requests. Existing offline data is never automatically transferred into account mode.
 
-```sh
-npm ci
-cp .env.example .env
-npm run web
-```
+- Personal records use names, lend/borrow direction, date, note and AED amounts in integer minor units.
+- Record partial or full repayments, reject overpayments, and undo a payment with a preserved correction history.
+- Temporary vaults keep one or more event expenses. Permanent vaults provide a reusable home for recurring events, with the previous roster carried into the next form.
+- Each event has its own date, total, participants, a selected self participant and payer. Equal splits assign remainder cents to participants in saved order. The payer covers their own share.
+- Football AED630 shared by14 including you is AED45 each. If you paid, the other13 owe AED585. When someone else paid, only your remaining share is included in your payable balance.
+- Archive/reactivate vaults without deletion. Archived unpaid amounts remain in your overview.
 
-Use `npm run ios` / `npm run android` for an installed simulator or scan the Expo QR code with Expo Go. The loopback-only demo supports the web preview and simulators with host-loopback access; physical devices require a separately configured, authenticated API reachable over HTTPS. Do not expose the demo API on a LAN or public network. Set backend CORS to the web preview origin (default localhost:8081). Restart Expo after changing environment variables.
+Storage is local AsyncStorage on native devices and browser localStorage on web. Local ledger data is not encrypted by this app. BetweenUs does not upload it or send reminders. There is no export/backup function yet: uninstalling, clearing data, changing browser, or losing the device can lose records. OS-level backups depend on your device settings. Failed writes show an error and do not publish unsaved changes; unreadable saved data is not silently replaced. Web preview assets still require the local preview server; no service worker is installed for cold-start offline browser use. Installed native runtime has not yet been exercised on a physical device.
 
-The explicitly labeled local demo selector uses `demo-lender` (Alex, alex@example.com) and `demo-borrower` (John, john@example.com). The backend must enable its demo authentication mode. Create a debt as Alex for john@example.com, switch to John, open it and confirm or dispute with a reason, then switch back to see the shared result. Demo records live in memory and reset whenever the backend restarts. Pull down to refresh.
+## Shared account mode and local API demo
 
-## Included behavior
+Choose **Use account mode** for the existing email sign-in and shared confirmation workflow. It requires a configured Supabase project and authenticated API. It does not synchronize offline records. No subscription or billing system is implemented; account pricing is not committed here.
 
-- Accepted-only receivable, payable and net AED totals.
-- Pending, confirmed, and needs-resolution views.
-- Lender creates a positive AED debt using integer minor units, borrower email and description.
-- Only the named borrower sees confirmation and dispute controls; the API must independently enforce authorization.
-- Debt history, visible network and validation errors, and explicit empty states.
+Shared account records have pending, confirmed and needs-resolution states. Only confirmed shared debts count in account balances; the named borrower can confirm or dispute with a reason. Account-mode repayment tracking, invitation delivery, notifications, editing and dispute closure are not implemented. Offline repayments are private local notes and never send messages or move money.
 
-AED is the only creation currency supported by this pilot. Balances are never combined across currencies. There is no payment processing, repayment tracking, invitation delivery, push notification, email notification, debt editing or dispute-closing workflow. Disputed debts stay out of confirmed balances.
+For the existing API demo, explicitly set `EXPO_PUBLIC_DEMO_MODE=true` and start the backend's `npm run dev:demo` loopback-only ephemeral server at localhost:3001. This opens the labelled Alex/John persona demo directly. Use `npm run export:demo` for an explicitly named demo build. Real-mode exports force demo mode off. Do not expose the demo API on a LAN or public network. Physical devices using shared account mode require a reachable authenticated HTTPS API. Match backend CORS to the web preview origin (localhost:8081 by default). Restart Expo after changing environment variables.
 
 ## Authentication and release boundary
 
@@ -58,4 +55,6 @@ Production export refuses an explicitly enabled demo flag. For the local browser
 
 `npm run export:auth-test` builds a fake-configuration web bundle into `dist-auth`; serve it on localhost:8082 and run `npm run test:auth-browser`. Every auth and API request is intercepted. It tests wrong codes, success, persistence, expired-session refresh, failed-signout stale-refresh isolation, and an old account request completing after a new account signs in. This sends no real email.
 
-CI repeats unit tests, type checking and a production web bundle. A web bundle does not verify iOS/Android device behavior. Exercise the two-person flow above on both device platforms before a pilot release.
+`npm run export:offline-test` creates `dist-offline` with fake account configuration. Serve it on localhost:8083, then run `npm run test:offline-browser`. This blocks every external request, seeds a dormant account session, and verifies no auth requests; football630/14→585, overpayment rejection, partial/full payments, undo, reload persistence, archive/reactivation, multiple permanent events, and a personal borrowing repayment. Only local preview assets remain reachable. Screenshots are saved to `/tmp/betweenus-football-event.png` and `/tmp/betweenus-offline-overview.png`.
+
+CI repeats unit tests (auth plus offline model/storage), type checking and a production web bundle. A web bundle does not verify iOS/Android device behavior. Exercise the two-person flow above on both device platforms before a pilot release.

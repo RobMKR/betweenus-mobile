@@ -1,0 +1,807 @@
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { amountToMinor, Balance, Debt, DEMO, money, request } from "./api";
+import AuthGate from "./AuthGate";
+const colors = {
+  ink: "#203b35",
+  muted: "#71817a",
+  green: "#176b50",
+  pale: "#eaf2eb",
+  paper: "#f7f8f3",
+  line: "#e3e8df",
+};
+const labels = {
+  pending: "Awaiting confirmation",
+  accepted: "Confirmed",
+  disputed: "Needs resolution",
+};
+type Filter = "all" | "pending" | "accepted" | "disputed";
+export default function Home({ onExit }: { onExit?: () => void }) {
+  if (DEMO) return <DebtHome onExit={onExit} />;
+  return (
+    <View style={{ flex: 1 }}>
+      {onExit && (
+        <Pressable
+          onPress={onExit}
+          style={{ padding: 14, backgroundColor: "#f7f8f3" }}
+        >
+          <Text style={{ color: "#176b50" }}>‹ Mode selection</Text>
+        </Pressable>
+      )}
+      <AuthGate>
+        {(token, signOut, identity) => (
+          <DebtHome
+            key={identity}
+            accessToken={token}
+            signOut={signOut}
+            onExit={onExit}
+          />
+        )}
+      </AuthGate>
+    </View>
+  );
+}
+function DebtHome({
+  accessToken = "",
+  signOut,
+  onExit,
+}: {
+  accessToken?: string;
+  signOut?: () => Promise<void>;
+  onExit?: () => void;
+}) {
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  const [persona, setPersona] = useState<"lender" | "borrower">("lender");
+  const token = DEMO ? `demo-${persona}` : accessToken;
+  const requestIdentity = useRef(token);
+  requestIdentity.current = token;
+  const [me, setMe] = useState<{ id: string; email: string } | null>(null);
+  const [debts, setDebts] = useState<Debt[]>([]);
+  const [balances, setBalances] = useState<Balance[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [detail, setDetail] = useState<Debt | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [email, setEmail] = useState("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [reason, setReason] = useState("");
+  async function refresh() {
+    if (!token) return;
+    const operationToken = token;
+    setBusy(true);
+    setError("");
+    try {
+      const [user, list, total] = await Promise.all([
+        request<{ id: string; email: string }>("/me", token),
+        request<{ debts: Debt[] }>("/debts", token),
+        request<{ balances: Balance[] }>("/balances", token),
+      ]);
+      if (!active.current || requestIdentity.current !== operationToken) return;
+      setMe(user);
+      setDebts(list.debts);
+      setBalances(total.balances);
+      setLoaded(true);
+    } catch (e) {
+      if (active.current && requestIdentity.current === operationToken)
+        setError((e as Error).message);
+    } finally {
+      if (active.current && requestIdentity.current === operationToken)
+        setBusy(false);
+    }
+  }
+  useEffect(() => {
+    setMe(null);
+    setDebts([]);
+    setBalances([]);
+    setLoaded(false);
+    setDetail(null);
+    setCreating(false);
+    setEmail("");
+    setAmount("");
+    setNote("");
+    setReason("");
+    setError("");
+    void refresh();
+  }, [token]);
+  async function create() {
+    const minor = amountToMinor(amount);
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
+      !minor ||
+      !note.trim()
+    ) {
+      setError(
+        "Enter a valid email, a positive amount up to AED 10,000,000 with up to 2 decimals, and a note.",
+      );
+      return;
+    }
+    if (email.trim().toLowerCase() === me?.email.toLowerCase()) {
+      setError("Choose someone other than yourself.");
+      return;
+    }
+    const operationToken = token;
+    setBusy(true);
+    setError("");
+    try {
+      await request("/debts", token, {
+        borrowerEmail: email.trim().toLowerCase(),
+        amountMinor: minor,
+        currency: "AED",
+        description: note.trim(),
+      });
+      if (!active.current || requestIdentity.current !== operationToken) return;
+      setCreating(false);
+      setEmail("");
+      setAmount("");
+      setNote("");
+      await refresh();
+    } catch (e) {
+      if (active.current && requestIdentity.current === operationToken)
+        setError((e as Error).message);
+    } finally {
+      if (active.current && requestIdentity.current === operationToken)
+        setBusy(false);
+    }
+  }
+  async function respond(action: "accept" | "dispute") {
+    if (!detail) return;
+    if (action === "dispute" && !reason.trim()) {
+      setError("Add a reason so you can resolve this together.");
+      return;
+    }
+    const operationToken = token;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await request<{ debt: Debt }>(
+        `/debts/${detail.id}/${action}`,
+        token,
+        action === "dispute" ? { reason: reason.trim() } : {},
+      );
+      if (!active.current || requestIdentity.current !== operationToken) return;
+      setDetail(result.debt);
+      setReason("");
+      await refresh();
+    } catch (e) {
+      if (active.current && requestIdentity.current === operationToken)
+        setError((e as Error).message);
+    } finally {
+      if (active.current && requestIdentity.current === operationToken)
+        setBusy(false);
+    }
+  }
+  const total = balances.find((b) => b.currency === "AED");
+  const shown = debts.filter((d) => filter === "all" || d.status === filter);
+  const pending = debts.filter((d) => d.status === "pending").length;
+  function button(title: string, fn: () => void, secondary = false) {
+    return (
+      <Pressable
+        disabled={busy}
+        onPress={fn}
+        style={[s.button, secondary && s.secondary, busy && { opacity: 0.6 }]}
+      >
+        <Text style={[s.buttonText, secondary && { color: colors.green }]}>
+          {title}
+        </Text>
+      </Pressable>
+    );
+  }
+  function close() {
+    setCreating(false);
+    setDetail(null);
+    setError("");
+    setReason("");
+  }
+  return (
+    <SafeAreaView style={s.safe}>
+      <ScrollView
+        contentContainerStyle={s.page}
+        refreshControl={
+          <RefreshControl refreshing={busy} onRefresh={refresh} />
+        }
+      >
+        {onExit && (
+          <Pressable onPress={onExit}>
+            <Text style={s.small}>‹ Mode selection</Text>
+          </Pressable>
+        )}
+        <View style={s.top}>
+          <View style={s.brand}>
+            <View style={s.logo}>
+              <Ionicons name="people-outline" size={25} color="white" />
+            </View>
+            <Text style={s.brandName}>BetweenUs</Text>
+          </View>
+          <View style={s.avatar}>
+            <Text style={s.avatarText}>{persona === "lender" ? "A" : "J"}</Text>
+          </View>
+        </View>
+        {DEMO && (
+          <View style={s.demo}>
+            <Text style={s.demoLabel}>LOCAL DEMO · VIEW AS</Text>
+            <View style={s.row}>
+              {(["lender", "borrower"] as const).map((p) => (
+                <Pressable
+                  key={p}
+                  onPress={() => setPersona(p)}
+                  style={[s.persona, persona === p && s.personaActive]}
+                >
+                  <Text
+                    style={{
+                      color: persona === p ? colors.green : colors.muted,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {p === "lender" ? "Alex · lender" : "John · borrower"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+        {!DEMO && (
+          <View style={s.rowBetween}>
+            <Text style={s.small}>
+              {me?.email || "Connecting your account…"}
+            </Text>
+            <Pressable onPress={() => void signOut?.()}>
+              <Text style={{ color: colors.green, fontWeight: "600" }}>
+                Sign out
+              </Text>
+            </Pressable>
+          </View>
+        )}
+        <View style={s.heading}>
+          <Text style={s.eyebrow}>A LITTLE CLARITY, BETWEEN FRIENDS</Text>
+          <Text style={s.title}>Good relationships.{"\n"}Clear balances.</Text>
+          <Text style={s.body}>
+            Keep shared debts simple, and everyone on the same page.
+          </Text>
+        </View>
+        <View style={s.balanceCard}>
+          <View style={s.rowBetween}>
+            <Text style={s.balanceLabel}>YOUR OVERVIEW</Text>
+            <Ionicons name="leaf-outline" size={21} color="#b9dbc7" />
+          </View>
+          <Text style={s.balanceAmount}>
+            {loaded ? money(total?.netMinor ?? 0) : "—"}
+          </Text>
+          <Text style={s.balanceCaption}>
+            {(total?.netMinor ?? 0) < 0
+              ? "Your net amount to pay back"
+              : "Your net amount to receive"}
+          </Text>
+          <View style={s.balanceDivider} />
+          <View style={s.row}>
+            <View style={s.half}>
+              <Text style={s.balanceSmall}>Owed to you</Text>
+              <Text style={s.balanceValue}>
+                {loaded ? money(total?.receivableMinor ?? 0) : "—"}
+              </Text>
+            </View>
+            <View style={s.half}>
+              <Text style={s.balanceSmall}>You owe</Text>
+              <Text style={s.balanceValue}>
+                {loaded ? money(total?.payableMinor ?? 0) : "—"}
+              </Text>
+            </View>
+          </View>
+          <Text style={s.balanceFoot}>
+            Confirmed debts only · balances stay separate by currency
+          </Text>
+        </View>
+        <View style={s.rowBetween}>
+          <View>
+            <Text style={s.sectionTitle}>Shared debts</Text>
+            <Text style={s.small}>{pending} awaiting confirmation</Text>
+          </View>
+          <Pressable
+            disabled={!me || busy}
+            onPress={() => {
+              setError("");
+              setCreating(true);
+            }}
+            style={[s.add, !me && { opacity: 0.4 }]}
+          >
+            <Ionicons name="add" size={19} color="white" />
+            <Text style={s.buttonText}>Add debt</Text>
+          </Pressable>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.filters}
+        >
+          {(["all", "pending", "accepted", "disputed"] as Filter[]).map((f) => (
+            <Pressable
+              onPress={() => setFilter(f)}
+              key={f}
+              style={[s.filter, filter === f && s.activeFilter]}
+            >
+              <Text
+                style={{
+                  fontWeight: "600",
+                  color: filter === f ? "white" : colors.muted,
+                }}
+              >
+                {
+                  {
+                    all: "All debts",
+                    pending: "Pending",
+                    accepted: "Confirmed",
+                    disputed: "Needs resolution",
+                  }[f]
+                }
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {!!error && !creating && !detail && (
+          <Text accessibilityRole="alert" style={s.error}>
+            {error}
+            {"\n"}Pull down to retry. Check the API address and connection.
+          </Text>
+        )}
+        {busy && !loaded && <ActivityIndicator color={colors.green} />}
+        {shown.map((d) => (
+          <Pressable
+            key={d.id}
+            onPress={() => {
+              setDetail(d);
+              setError("");
+            }}
+            style={s.debt}
+          >
+            <View
+              style={[
+                s.debtAvatar,
+                {
+                  backgroundColor:
+                    d.status === "disputed" ? "#f9ece0" : colors.pale,
+                },
+              ]}
+            >
+              <Ionicons
+                name={
+                  d.lenderId === me?.id
+                    ? "arrow-up-outline"
+                    : "arrow-down-outline"
+                }
+                color={colors.green}
+                size={23}
+              />
+            </View>
+            <View style={{ flex: 1, gap: 5 }}>
+              <Text style={s.debtName}>
+                {
+                  (d.lenderId === me?.id
+                    ? d.borrowerEmail
+                    : d.lenderEmail
+                  ).split("@")[0]
+                }
+              </Text>
+              <Text style={s.small} numberOfLines={1}>
+                {d.description}
+              </Text>
+              <Text
+                style={[
+                  s.status,
+                  d.status === "disputed" && { color: "#a4652d" },
+                ]}
+              >
+                {labels[d.status]}
+              </Text>
+            </View>
+            <View style={{ alignItems: "flex-end", gap: 7 }}>
+              <Text style={s.debtAmount}>
+                {money(d.amountMinor, d.currency)}
+              </Text>
+              <Text style={s.small}>
+                {d.lenderId === me?.id ? "owes you" : "you owe"} ›
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+        {!shown.length && loaded && (
+          <View style={s.empty}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={31}
+              color={colors.muted}
+            />
+            <Text style={s.cardTitle}>A clear page</Text>
+            <Text style={s.body}>
+              No {filter === "all" ? "shared" : filter} debts here yet.
+            </Text>
+          </View>
+        )}
+        <View style={s.footer}>
+          <Ionicons name="heart-outline" color={colors.muted} size={15} />
+          <Text style={s.small}> Built on trust. Confirmed together.</Text>
+        </View>
+        <Text style={[s.small, { textAlign: "center" }]}>
+          A shared record, not a payment service.
+        </Text>
+      </ScrollView>
+      <Modal
+        visible={creating || !!detail}
+        animationType="slide"
+        onRequestClose={close}
+      >
+        <SafeAreaView style={s.safe}>
+          <ScrollView contentContainerStyle={s.modal}>
+            <View style={s.rowBetween}>
+              <Text style={s.sectionTitle}>
+                {creating ? "Add a shared debt" : "Debt details"}
+              </Text>
+              <Pressable
+                accessibilityLabel="Close"
+                onPress={close}
+                style={s.close}
+              >
+                <Ionicons name="close" size={25} color={colors.ink} />
+              </Pressable>
+            </View>
+            {creating ? (
+              <>
+                <Text style={s.body}>
+                  You’re recording money you lent. The other person will review
+                  it before it counts toward your balance.
+                </Text>
+                <Text style={s.label}>Who owes you?</Text>
+                <TextInput
+                  style={s.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="friend@example.com"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  accessibilityLabel="Borrower email"
+                />
+                <Text style={s.label}>Amount · AED</Text>
+                <TextInput
+                  style={s.input}
+                  value={amount}
+                  onChangeText={setAmount}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                  accessibilityLabel="Amount in AED"
+                />
+                <Text style={s.label}>What was it for?</Text>
+                <TextInput
+                  style={s.input}
+                  value={note}
+                  onChangeText={setNote}
+                  placeholder="Dinner, a trip, a little help…"
+                  maxLength={500}
+                  accessibilityLabel="Description"
+                />
+                <Text style={s.small}>
+                  No email or push notification is sent in this pilot.
+                </Text>
+                {button("Send for confirmation", create)}
+              </>
+            ) : (
+              detail && (
+                <>
+                  <View style={s.detailHero}>
+                    <Text style={s.status}>{labels[detail.status]}</Text>
+                    <Text style={s.detailAmount}>
+                      {money(detail.amountMinor, detail.currency)}
+                    </Text>
+                    <Text style={s.cardTitle}>{detail.description}</Text>
+                  </View>
+                  <Text style={s.label}>Lent by</Text>
+                  <Text style={s.body}>{detail.lenderEmail}</Text>
+                  <Text style={s.label}>Borrowed by</Text>
+                  <Text style={s.body}>{detail.borrowerEmail}</Text>
+                  {detail.status === "pending" &&
+                    detail.borrowerEmail.toLowerCase() ===
+                      me?.email.toLowerCase() && (
+                      <View style={s.card}>
+                        <Text style={s.cardTitle}>Does this look right?</Text>
+                        <Text style={s.body}>
+                          Confirm to include this debt in both balances. If
+                          something is off, add a reason below.
+                        </Text>
+                        {button("Confirm debt", () => respond("accept"))}
+                        <TextInput
+                          style={s.input}
+                          value={reason}
+                          onChangeText={setReason}
+                          placeholder="What needs correcting?"
+                          maxLength={500}
+                          multiline
+                          accessibilityLabel="Dispute reason"
+                        />
+                        {button(
+                          "Flag for resolution",
+                          () => respond("dispute"),
+                          true,
+                        )}
+                      </View>
+                    )}
+                  <Text style={[s.sectionTitle, { marginTop: 22 }]}>
+                    Shared history
+                  </Text>
+                  {detail.history.map((event, i) => (
+                    <View key={event.id || i} style={s.history}>
+                      <View style={s.dot} />
+                      <View style={{ flex: 1, gap: 5 }}>
+                        <Text style={s.cardTitle}>
+                          {{
+                            created: "Debt recorded",
+                            accepted: "Confirmed by borrower",
+                            disputed: "Flagged for resolution",
+                          }[event.action || ""] || event.action}
+                        </Text>
+                        <Text style={s.small}>
+                          {new Date(event.createdAt).toLocaleString()}
+                        </Text>
+                        {event.reason && (
+                          <Text style={s.body}>{event.reason}</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                  {detail.status === "disputed" && (
+                    <Text style={s.body}>
+                      Talk with each other to resolve the difference. Editing,
+                      settling, and closing disputes are not available in this
+                      pilot.
+                    </Text>
+                  )}
+                </>
+              )
+            )}
+            {!!error && (
+              <Text accessibilityRole="alert" style={s.error}>
+                {error}
+              </Text>
+            )}
+            {busy && <ActivityIndicator color={colors.green} />}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.paper },
+  page: {
+    width: "100%",
+    maxWidth: 760,
+    alignSelf: "center",
+    padding: 24,
+    paddingBottom: 36,
+    gap: 22,
+  },
+  top: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  brand: { flexDirection: "row", alignItems: "center", gap: 10 },
+  logo: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: colors.green,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  brandName: {
+    fontSize: 23,
+    fontWeight: "700",
+    color: colors.ink,
+    letterSpacing: -0.8,
+  },
+  avatar: {
+    width: 39,
+    height: 39,
+    borderRadius: 20,
+    backgroundColor: "#e7dfcb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { fontWeight: "700", color: colors.ink },
+  demo: {
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: 10,
+    borderRadius: 12,
+    gap: 8,
+  },
+  demoLabel: {
+    fontSize: 9,
+    letterSpacing: 1.5,
+    fontWeight: "700",
+    color: colors.muted,
+  },
+  row: { flexDirection: "row", gap: 10 },
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  persona: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
+  personaActive: { backgroundColor: colors.pale },
+  heading: { gap: 12, paddingTop: 8 },
+  eyebrow: {
+    fontSize: 10,
+    letterSpacing: 1.7,
+    color: colors.green,
+    fontWeight: "700",
+  },
+  title: {
+    fontSize: 37,
+    lineHeight: 43,
+    letterSpacing: -1.6,
+    fontWeight: "600",
+    color: colors.ink,
+  },
+  body: { fontSize: 15, lineHeight: 23, color: colors.muted },
+  balanceCard: {
+    backgroundColor: colors.ink,
+    borderRadius: 23,
+    padding: 25,
+    gap: 10,
+  },
+  balanceLabel: {
+    fontSize: 10,
+    color: "#d2dfd7",
+    letterSpacing: 1.8,
+    fontWeight: "700",
+  },
+  balanceAmount: {
+    color: "white",
+    fontSize: 39,
+    fontWeight: "600",
+    letterSpacing: -1,
+    marginTop: 8,
+  },
+  balanceCaption: { color: "#ccddd2", fontSize: 13 },
+  balanceDivider: { height: 1, backgroundColor: "#456056", marginVertical: 10 },
+  half: { flex: 1, gap: 8 },
+  balanceSmall: { color: "#bfcec5", fontSize: 12 },
+  balanceValue: { color: "white", fontSize: 19, fontWeight: "600" },
+  balanceFoot: { color: "#a9c1b1", fontSize: 10, marginTop: 12 },
+  sectionTitle: {
+    fontSize: 21,
+    fontWeight: "600",
+    color: colors.ink,
+    letterSpacing: -0.5,
+  },
+  small: { fontSize: 12, color: colors.muted, lineHeight: 18 },
+  add: {
+    backgroundColor: colors.green,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  button: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: colors.green,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  buttonText: { color: "white", fontSize: 13, fontWeight: "600" },
+  secondary: { backgroundColor: colors.pale },
+  filters: { gap: 8 },
+  filter: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "#edf0e9",
+  },
+  activeFilter: { backgroundColor: colors.ink },
+  debt: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  debtAvatar: {
+    width: 47,
+    height: 47,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  debtName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.ink,
+    textTransform: "capitalize",
+  },
+  debtAmount: { fontSize: 15, fontWeight: "600", color: colors.ink },
+  status: { fontSize: 11, fontWeight: "600", color: colors.green },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 14,
+  },
+  empty: { alignItems: "center", padding: 28, gap: 10 },
+  card: {
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: "white",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  cardTitle: { fontSize: 15, fontWeight: "600", color: colors.ink },
+  input: {
+    backgroundColor: "white",
+    borderColor: "#d5ded3",
+    borderWidth: 1,
+    borderRadius: 11,
+    padding: 15,
+    fontSize: 16,
+    color: colors.ink,
+    minHeight: 51,
+  },
+  label: { fontSize: 13, fontWeight: "600", color: colors.ink, marginTop: 12 },
+  modal: {
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+    padding: 24,
+    gap: 15,
+    paddingBottom: 50,
+  },
+  close: { padding: 8 },
+  detailHero: { paddingVertical: 25, gap: 15 },
+  detailAmount: { fontSize: 40, fontWeight: "600", color: colors.ink },
+  history: {
+    flexDirection: "row",
+    gap: 15,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  dot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.green,
+    marginTop: 5,
+  },
+  error: {
+    color: "#a33131",
+    fontSize: 14,
+    lineHeight: 21,
+    padding: 14,
+    backgroundColor: "#fff0ed",
+    borderRadius: 10,
+  },
+});

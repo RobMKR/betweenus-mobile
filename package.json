@@ -13,9 +13,11 @@
     "export:demo": "node scripts/export.cjs --demo",
     "test:smoke": "node scripts/smoke.cjs",
     "format": "prettier --write app src scripts *.json .github/workflows/ci.yml",
-    "test": "node --import tsx test/auth.test.ts",
+    "test": "node --import tsx test/auth.test.ts && node --import tsx test/offline.test.ts",
     "test:auth-browser": "node scripts/auth-smoke.cjs",
-    "export:auth-test": "node scripts/export-auth-test.cjs"
+    "export:auth-test": "node scripts/export-auth-test.cjs",
+    "test:offline-browser": "node scripts/offline-smoke.cjs",
+    "export:offline-test": "node scripts/export-offline-test.cjs"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +26,7 @@
   "private": true,
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "@supabase/supabase-js": "^2.119.0",
     "expo": "^58.0.25",
     "expo-constants": "^58.0.16",
@@ -31,6 +34,7 @@
     "expo-linking": "^58.0.17",
     "expo-router": "^58.0.31",
     "expo-secure-store": "^58.0.3",
+    "expo-splash-screen": "~58.0.14",
     "expo-status-bar": "^58.0.5",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

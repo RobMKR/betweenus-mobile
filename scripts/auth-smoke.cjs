@@ -1,5 +1,5 @@
 // All Supabase and debt API traffic is intercepted: this script sends no email.
-const { chromium } = require("@playwright/test");
+const { chromium, expect } = require("@playwright/test");
 const assert = require("node:assert/strict");
 const origin = process.env.AUTH_TEST_URL || "http://localhost:8082";
 const authOrigin = "https://auth-test.supabase.co";
@@ -83,7 +83,9 @@ const session = (email) => ({
   await page.route("https://api-test.invalid/v1/**", async (route) => {
     const url = route.request().url(),
       bearer = route.request().headers().authorization || "";
-    const alice = bearer.includes(jwt(userA));
+    const alice =
+      JSON.parse(Buffer.from(bearer.split(".")[1], "base64url").toString())
+        .sub === userA;
     const json = (data) =>
       route.fulfill({
         status: 200,
@@ -134,6 +136,7 @@ const session = (email) => ({
     throw new Error(`Unexpected API request ${url}`);
   });
   await page.goto(origin);
+  await page.getByText("Use account mode", { exact: true }).click();
   await page
     .getByLabel("Email address", { exact: true })
     .fill("Alice@example.com");
@@ -165,6 +168,8 @@ const session = (email) => ({
   assert.ok(refreshRequests >= 1, "expired session refreshes");
   holdDebts = true;
   await page.reload();
+
+  await expect.poll(() => heldRoute !== null).toBe(true);
 
   // /me remains gated by the held aggregate request, but sign-out stays available.
   failLogout = true;
