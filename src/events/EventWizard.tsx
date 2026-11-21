@@ -285,235 +285,246 @@ function WizardSession({
   }
 
   return (
-    <Sheet visible title="New event" onClose={close}>
-      <View style={styles.header}>
-        <Text style={s.body}>{vaultTitle}</Text>
-        <View
-          style={styles.progress}
-          accessible
-          accessibilityLabel={`Step ${step + 1} of 3`}
-        >
-          {steps.map((label, index) => (
-            <View
-              key={label}
-              style={[styles.segment, index <= step && styles.completed]}
-            />
-          ))}
-        </View>
-        <Text style={s.section} accessibilityRole="header">
-          {steps[step]}
-        </Text>
-      </View>
-      {step === 0 && (
-        <>
-          <Field
-            label="Event title"
-            value={draft.title}
-            onChangeText={(title) => update({ title })}
-            maxLength={100}
-            editable={!locked}
-          />
-          <EventDateField
-            value={draft.date}
-            onChange={(date) => update({ date })}
-            onEditingChange={setEditingDate}
-            disabled={locked}
-          />
-          <Field
-            label="Total amount (AED)"
-            value={draft.amount}
-            onChangeText={(amount) => update({ amount })}
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            editable={!locked}
-          />
-        </>
-      )}
-
-      {step === 1 && (
-        <>
-          <View style={styles.selection}>
-            <Text style={[s.label, styles.personText]}>Include me</Text>
-            <Switch
-              accessibilityLabel="Include me"
-              value={draft.includeMe}
-              disabled={locked || (!draft.includeMe && count >= 100)}
-              onValueChange={(includeMe) => update({ includeMe })}
-              trackColor={{ true: c.green }}
-            />
+    <>
+      <Sheet visible={!addingPerson} title="New event" onClose={close}>
+        <View style={styles.header}>
+          <Text style={s.body}>{vaultTitle}</Text>
+          <View
+            style={styles.progress}
+            accessible
+            accessibilityLabel={`Step ${step + 1} of 3`}
+          >
+            {steps.map((label, index) => (
+              <View
+                key={label}
+                style={[styles.segment, index <= step && styles.completed]}
+              />
+            ))}
           </View>
-          <Text style={s.body} accessibilityLiveRegion="polite">
-            {count === 1 ? "1 participant" : `${count} participants`}
-            {count === 100 ? " · Maximum reached" : ""}
+          <Text style={s.section} accessibilityRole="header">
+            {steps[step]}
           </Text>
-          {personGroup("Vault members", members)}
-          {personGroup("Saved People", savedPeople)}
-          <Button
-            title="Add a person"
-            secondary
-            disabled={locked || count >= 100}
-            onPress={() => {
-              setMessage("");
-              setAddingPerson(true);
-            }}
-          />
-          <View style={styles.group}>
-            <Text style={s.cardTitle} accessibilityRole="header">
-              Who paid?
-            </Text>
-            {payerNeedsReview && (
-              <Text accessibilityRole="alert" style={s.error}>
-                Choose a payer. A payer other than you must be a selected
-                participant.
-              </Text>
-            )}
-            <Selection
-              role="radio"
-              label="You"
-              detail={draft.includeMe ? undefined : "Paying outside the split"}
-              checked={draft.payerId === "self"}
-              disabled={locked}
-              onPress={() => update({ payerId: "self" })}
+        </View>
+        {step === 0 && (
+          <>
+            <Field
+              label="Event title"
+              value={draft.title}
+              onChangeText={(title) => update({ title })}
+              maxLength={100}
+              editable={!locked}
             />
-            {draft.selectedPersonIds.map((id) => {
-              const person = byId.get(id);
-              return person ? (
-                <Selection
-                  role="radio"
-                  key={id}
-                  label={person.name}
-                  detail={personDetail(person.id)}
-                  checked={draft.payerId === id}
-                  disabled={locked}
-                  onPress={() => update({ payerId: id })}
-                />
-              ) : null;
-            })}
-          </View>
-        </>
-      )}
+            <EventDateField
+              value={draft.date}
+              onChange={(date) => update({ date })}
+              onEditingChange={setEditingDate}
+              disabled={locked}
+            />
+            <Field
+              label="Total amount (AED)"
+              value={draft.amount}
+              onChangeText={(amount) => update({ amount })}
+              keyboardType="decimal-pad"
+              inputMode="decimal"
+              editable={!locked}
+            />
+          </>
+        )}
 
-      {preview && (
-        <>
-          <View style={styles.summary}>
-            <Text style={s.cardTitle}>{draft.title.trim()}</Text>
-            <Text style={s.body}>
-              {draft.date} · Paid by{" "}
-              {draft.payerId ? personLabel(draft.payerId) : "—"}
-            </Text>
-            {!!preview.totalMinor && (
-              <Text style={s.amount}>{amountLabel(preview.totalMinor)}</Text>
-            )}
-          </View>
-          <View style={styles.group}>
-            <Text style={s.cardTitle} accessibilityRole="header">
-              Split method
-            </Text>
-            <Selection
-              role="radio"
-              label="Equal"
-              checked={draft.splitMode === "equal"}
-              disabled={locked}
-              onPress={() => update({ splitMode: "equal" })}
-            />
-            <Selection
-              role="radio"
-              label="Manual"
-              checked={draft.splitMode === "manual"}
-              disabled={locked}
-              onPress={() => update({ splitMode: "manual" })}
-            />
-          </View>
-          {preview.remainingMinor !== null && (
-            <View style={styles.summary} accessibilityLiveRegion="polite">
-              <Text style={s.cardTitle}>
-                {preview.remainingMinor < 0
-                  ? "Over-allocated"
-                  : "Remaining to allocate"}
-              </Text>
-              <Text style={s.cardTitle}>
-                {amountLabel(Math.abs(preview.remainingMinor))}
-              </Text>
+        {step === 1 && (
+          <>
+            <View style={styles.selection}>
+              <Text style={[s.label, styles.personText]}>Include me</Text>
+              <Switch
+                accessibilityLabel="Include me"
+                value={draft.includeMe}
+                disabled={locked || (!draft.includeMe && count >= 100)}
+                onValueChange={(includeMe) => update({ includeMe })}
+                trackColor={{ true: c.green }}
+              />
             </View>
-          )}
-          <View style={styles.group}>
-            {draft.splitMode === "equal"
-              ? preview.allocations.map(({ participantId, shareMinor }) => (
-                  <View key={participantId} style={styles.allocation}>
-                    <View style={styles.personText}>
-                      <Text style={s.label}>{personLabel(participantId)}</Text>
-                      {!!personDetail(participantId) && (
-                        <Text style={s.small}>
-                          {personDetail(participantId)}
-                        </Text>
-                      )}
-                    </View>
-                    <Text style={s.label}>{amountLabel(shareMinor)}</Text>
-                  </View>
-                ))
-              : preview.participantIds.map((id) => (
-                  <Field
-                    key={id}
-                    label={`${personLabel(id)} share (AED)${personDetail(id) ? ` · ${personDetail(id)}` : ""}`}
-                    value={
-                      Object.prototype.hasOwnProperty.call(
-                        draft.manualAmounts,
-                        id,
-                      )
-                        ? draft.manualAmounts[id]
-                        : ""
-                    }
-                    onChangeText={(value) =>
-                      update({
-                        manualAmounts: { ...draft.manualAmounts, [id]: value },
-                      })
-                    }
-                    placeholder="0.00"
-                    keyboardType="decimal-pad"
-                    inputMode="decimal"
-                    editable={!locked}
-                  />
-                ))}
-          </View>
-          {!!reviewError && (
-            <Text accessibilityRole="alert" style={s.error}>
-              {preview.errors.length ? preview.errors[0] : reviewError}
+            <Text style={s.body} accessibilityLiveRegion="polite">
+              {count === 1 ? "1 participant" : `${count} participants`}
+              {count === 100 ? " · Maximum reached" : ""}
             </Text>
+            {personGroup("Vault members", members)}
+            {personGroup("Saved People", savedPeople)}
+            <Button
+              title="Add a person"
+              secondary
+              disabled={locked || count >= 100}
+              onPress={() => {
+                setMessage("");
+                setAddingPerson(true);
+              }}
+            />
+            <View style={styles.group}>
+              <Text style={s.cardTitle} accessibilityRole="header">
+                Who paid?
+              </Text>
+              {payerNeedsReview && (
+                <Text accessibilityRole="alert" style={s.error}>
+                  Choose a payer. A payer other than you must be a selected
+                  participant.
+                </Text>
+              )}
+              <Selection
+                role="radio"
+                label="You"
+                detail={
+                  draft.includeMe ? undefined : "Paying outside the split"
+                }
+                checked={draft.payerId === "self"}
+                disabled={locked}
+                onPress={() => update({ payerId: "self" })}
+              />
+              {draft.selectedPersonIds.map((id) => {
+                const person = byId.get(id);
+                return person ? (
+                  <Selection
+                    role="radio"
+                    key={id}
+                    label={person.name}
+                    detail={personDetail(person.id)}
+                    checked={draft.payerId === id}
+                    disabled={locked}
+                    onPress={() => update({ payerId: id })}
+                  />
+                ) : null;
+              })}
+            </View>
+          </>
+        )}
+
+        {preview && (
+          <>
+            <View style={styles.summary}>
+              <Text style={s.cardTitle}>{draft.title.trim()}</Text>
+              <Text style={s.body}>
+                {draft.date} · Paid by{" "}
+                {draft.payerId ? personLabel(draft.payerId) : "—"}
+              </Text>
+              {!!preview.totalMinor && (
+                <Text style={s.amount}>{amountLabel(preview.totalMinor)}</Text>
+              )}
+            </View>
+            <View style={styles.group}>
+              <Text style={s.cardTitle} accessibilityRole="header">
+                Split method
+              </Text>
+              <Selection
+                role="radio"
+                label="Equal"
+                checked={draft.splitMode === "equal"}
+                disabled={locked}
+                onPress={() => update({ splitMode: "equal" })}
+              />
+              <Selection
+                role="radio"
+                label="Manual"
+                checked={draft.splitMode === "manual"}
+                disabled={locked}
+                onPress={() => update({ splitMode: "manual" })}
+              />
+            </View>
+            {preview.remainingMinor !== null && (
+              <View style={styles.summary} accessibilityLiveRegion="polite">
+                <Text style={s.cardTitle}>
+                  {preview.remainingMinor < 0
+                    ? "Over-allocated"
+                    : "Remaining to allocate"}
+                </Text>
+                <Text style={s.cardTitle}>
+                  {amountLabel(Math.abs(preview.remainingMinor))}
+                </Text>
+              </View>
+            )}
+            <View style={styles.group}>
+              {draft.splitMode === "equal"
+                ? preview.allocations.map(({ participantId, shareMinor }) => (
+                    <View key={participantId} style={styles.allocation}>
+                      <View style={styles.personText}>
+                        <Text style={s.label}>
+                          {personLabel(participantId)}
+                        </Text>
+                        {!!personDetail(participantId) && (
+                          <Text style={s.small}>
+                            {personDetail(participantId)}
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={s.label}>{amountLabel(shareMinor)}</Text>
+                    </View>
+                  ))
+                : preview.participantIds.map((id) => (
+                    <Field
+                      key={id}
+                      label={`${personLabel(id)} share (AED)${personDetail(id) ? ` · ${personDetail(id)}` : ""}`}
+                      value={
+                        Object.prototype.hasOwnProperty.call(
+                          draft.manualAmounts,
+                          id,
+                        )
+                          ? draft.manualAmounts[id]
+                          : ""
+                      }
+                      onChangeText={(value) =>
+                        update({
+                          manualAmounts: {
+                            ...draft.manualAmounts,
+                            [id]: value,
+                          },
+                        })
+                      }
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                      inputMode="decimal"
+                      editable={!locked}
+                    />
+                  ))}
+            </View>
+            {!!reviewError && (
+              <Text accessibilityRole="alert" style={s.error}>
+                {preview.errors.length ? preview.errors[0] : reviewError}
+              </Text>
+            )}
+          </>
+        )}
+        {!addingPerson && !!(message || (step === 2 && error)) && (
+          <Text accessibilityRole="alert" style={s.error}>
+            {(step === 2 && error) || message}
+          </Text>
+        )}
+        <View style={styles.group}>
+          {step < 2 ? (
+            <Button
+              title="Next"
+              disabled={
+                locked || editingDate || (step === 1 && payerNeedsReview)
+              }
+              onPress={next}
+            />
+          ) : (
+            <Button
+              title={locked ? "Saving event…" : "Save event"}
+              disabled={locked || !submission}
+              onPress={() => void save()}
+            />
           )}
-        </>
-      )}
-      {!addingPerson && !!(message || (step === 2 && error)) && (
-        <Text accessibilityRole="alert" style={s.error}>
-          {(step === 2 && error) || message}
-        </Text>
-      )}
-      <View style={styles.group}>
-        {step < 2 ? (
-          <Button
-            title="Next"
-            disabled={locked || editingDate || (step === 1 && payerNeedsReview)}
-            onPress={next}
-          />
-        ) : (
-          <Button
-            title={locked ? "Saving event…" : "Save event"}
-            disabled={locked || !submission}
-            onPress={() => void save()}
-          />
-        )}
-        {step > 0 && (
-          <Button
-            title="Back"
-            secondary
-            disabled={locked}
-            onPress={() => {
-              setMessage("");
-              setStep(step - 1);
-            }}
-          />
-        )}
-        <Button title="Cancel" secondary disabled={locked} onPress={close} />
-      </View>
+          {step > 0 && (
+            <Button
+              title="Back"
+              secondary
+              disabled={locked}
+              onPress={() => {
+                setMessage("");
+                setStep(step - 1);
+              }}
+            />
+          )}
+          <Button title="Cancel" secondary disabled={locked} onPress={close} />
+        </View>
+      </Sheet>
       <PersonEditor
         visible={addingPerson}
         onClose={() => {
@@ -525,7 +536,7 @@ function WizardSession({
         error={error || message}
         note="Saving this person adds them to Saved People and selects them for this event."
       />
-    </Sheet>
+    </>
   );
 }
 
