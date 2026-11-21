@@ -13,7 +13,7 @@ CI currently runs on pushes and PRs. Unattended issue dispatch and automated age
 
 ## Verification
 
-Use Node22+ and install the committed lockfile:
+Use Node24 LTS (24.3.0 or newer within the 24.x release line) and install the committed lockfile:
 
 ```sh
 npm ci

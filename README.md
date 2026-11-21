@@ -8,7 +8,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue-to-PR workflow, [AGENTS.md]
 
 ## Free offline mode
 
-Use Node 22+, run `npm ci`, then `npm run web` (or `npm run ios` / `npm run android` with a configured simulator). Choose **Use offline — free** on the first launch. No environment variables, backend, account, email or registration are needed. The selected mode is remembered on this device; **Switch mode** returns to the choice. Account code is lazy-loaded only after choosing account mode, so entering offline mode does not restore Supabase sessions or make auth/API requests. Existing offline data is never automatically transferred into account mode.
+Use Node24 LTS (24.3.0 or newer within the 24.x release line), run `npm ci`, then `npm run web` (or `npm run ios` / `npm run android` with a configured simulator). Choose **Use offline — free** on the first launch. No environment variables, backend, account, email or registration are needed. The selected mode is remembered on this device; **Switch mode** returns to the choice. Account code is lazy-loaded only after choosing account mode, so entering offline mode does not restore Supabase sessions or make auth/API requests. Existing offline data is never automatically transferred into account mode.
 
 - Personal records use names, lend/borrow direction, date, note and AED amounts in integer minor units.
 - Record partial or full repayments, reject overpayments, and undo a payment with a preserved correction history.
