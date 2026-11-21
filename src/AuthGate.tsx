@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   Pressable,
   StyleSheet,
   Text,
@@ -14,7 +17,9 @@ import { supabase, sessionStorage, SESSION_KEY } from "./auth";
 import { requestEmailCode, verifyEmailCode } from "./auth-flow";
 export default function AuthGate({
   children,
+  onExit,
 }: {
+  onExit?: () => void;
   children: (
     token: string,
     signOut: () => Promise<void>,
@@ -130,98 +135,124 @@ export default function AuthGate({
       if (current === generation.current) setBusy(false);
     }
   }
-  if (loading)
-    return (
-      <SafeAreaView style={styles.page}>
-        <ActivityIndicator color="#176b50" />
-      </SafeAreaView>
-    );
-  if (session)
+  if (!loading && session)
     return <>{children(session.access_token, signOut, session.user.id)}</>;
   return (
     <SafeAreaView style={styles.page}>
-      <View style={styles.card}>
-        <Text style={styles.brand}>BetweenUs</Text>
-        <Text style={styles.title}>
-          {supabase
-            ? "A little clarity starts here."
-            : "Sign-in needs configuration"}
-        </Text>
-        <Text style={styles.text}>
-          {supabase
-            ? "Sign in with a code sent to your email. No password to remember."
-            : "Set the public Supabase project URL and publishable key, then rebuild the app. Account sign-in is unavailable until this project is connected."}
-        </Text>
-        {supabase && (
-          <>
-            <TextInput
-              accessibilityLabel="Email address"
-              style={styles.input}
-              value={email}
-              editable={!sent && !busy}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholder="you@example.com"
+      {onExit && (
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to mode selection"
+            onPress={onExit}
+            style={styles.returnButton}
+          >
+            <Text style={styles.returnText}>‹ Mode selection</Text>
+          </Pressable>
+        </View>
+      )}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          {loading ? (
+            <ActivityIndicator
+              accessibilityLabel="Loading account"
+              color="#176b50"
             />
-            {sent && (
-              <>
-                <Text style={styles.text}>
-                  Check your email for a numeric code. Delivery may take a
-                  moment.
-                </Text>
-                <TextInput
-                  accessibilityLabel="Email code"
-                  style={styles.input}
-                  value={code}
-                  onChangeText={setCode}
-                  keyboardType="number-pad"
-                  autoComplete="one-time-code"
-                  placeholder="Email code"
-                  maxLength={10}
-                />
-              </>
-            )}
-            <Pressable
-              disabled={busy}
-              style={styles.button}
-              onPress={() => void submit(sent)}
-            >
-              <Text style={styles.buttonText}>
-                {busy
-                  ? "Please wait…"
-                  : sent
-                    ? "Verify & sign in"
-                    : "Email me a code"}
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.brand}>BetweenUs</Text>
+              <Text style={styles.title}>
+                {supabase
+                  ? "A little clarity starts here."
+                  : "Sign-in needs configuration"}
               </Text>
-            </Pressable>
-            {sent && (
-              <>
-                <Pressable disabled={busy} onPress={() => void submit(false)}>
-                  <Text style={styles.link}>Resend code</Text>
-                </Pressable>
-                <Pressable
-                  disabled={busy}
-                  onPress={() => {
-                    generation.current++;
-                    setSent(false);
-                    setCode("");
-                    setError("");
-                  }}
-                >
-                  <Text style={styles.link}>Use another email</Text>
-                </Pressable>
-              </>
-            )}
-          </>
-        )}
-        {!!error && (
-          <Text accessibilityRole="alert" style={styles.error}>
-            {error}
-          </Text>
-        )}
-        <Text style={styles.text}>A shared record, built on trust.</Text>
-      </View>
+              <Text style={styles.text}>
+                {supabase
+                  ? "Sign in with a code sent to your email. No password to remember."
+                  : "Set the public Supabase project URL and publishable key, then rebuild the app. Account sign-in is unavailable until this project is connected."}
+              </Text>
+              {supabase && (
+                <>
+                  <TextInput
+                    accessibilityLabel="Email address"
+                    style={styles.input}
+                    value={email}
+                    editable={!sent && !busy}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    placeholder="you@example.com"
+                  />
+                  {sent && (
+                    <>
+                      <Text style={styles.text}>
+                        Check your email for a numeric code. Delivery may take a
+                        moment.
+                      </Text>
+                      <TextInput
+                        accessibilityLabel="Email code"
+                        style={styles.input}
+                        value={code}
+                        onChangeText={setCode}
+                        keyboardType="number-pad"
+                        autoComplete="one-time-code"
+                        placeholder="Email code"
+                        maxLength={10}
+                      />
+                    </>
+                  )}
+                  <Pressable
+                    disabled={busy}
+                    style={styles.button}
+                    onPress={() => void submit(sent)}
+                  >
+                    <Text style={styles.buttonText}>
+                      {busy
+                        ? "Please wait…"
+                        : sent
+                          ? "Verify & sign in"
+                          : "Email me a code"}
+                    </Text>
+                  </Pressable>
+                  {sent && (
+                    <>
+                      <Pressable
+                        disabled={busy}
+                        onPress={() => void submit(false)}
+                      >
+                        <Text style={styles.link}>Resend code</Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={busy}
+                        onPress={() => {
+                          generation.current++;
+                          setSent(false);
+                          setCode("");
+                          setError("");
+                        }}
+                      >
+                        <Text style={styles.link}>Use another email</Text>
+                      </Pressable>
+                    </>
+                  )}
+                </>
+              )}
+              {!!error && (
+                <Text accessibilityRole="alert" style={styles.error}>
+                  {error}
+                </Text>
+              )}
+              <Text style={styles.text}>A shared record, built on trust.</Text>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -229,9 +260,23 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: "#f7f8f3",
-    justifyContent: "center",
-    padding: 24,
   },
+  header: { paddingHorizontal: 12, paddingVertical: 4 },
+  returnButton: {
+    minHeight: 44,
+    minWidth: 44,
+    alignSelf: "flex-start",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  returnText: {
+    color: "#176b50",
+    fontSize: 14,
+    lineHeight: 24,
+    fontWeight: "600",
+  },
+  content: { flexGrow: 1, justifyContent: "center", padding: 24 },
   card: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 20 },
   brand: { fontSize: 25, fontWeight: "700", color: "#203b35" },
   title: {
