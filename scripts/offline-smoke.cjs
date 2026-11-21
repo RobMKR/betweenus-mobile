@@ -54,9 +54,7 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
   await button("Save vault").click();
   await button("Add event expense").click();
   await page.getByLabel("Event title", { exact: true }).fill("Pitch booking");
-  await page
-    .getByLabel("Event date · YYYY-MM-DD", { exact: true })
-    .fill("2026-11-21");
+  await page.getByLabel("Event date", { exact: true }).fill("2026-11-21");
   await page.getByLabel("Event total · AED", { exact: true }).fill("630");
   const roster = [
     "You",

@@ -25,11 +25,20 @@ Use Node24 LTS (24.3.0 or newer within the 24.x release line), run `npm ci`, the
 - Personal records use names, lend/borrow direction, date, note and AED amounts in integer minor units.
 - Record partial or full repayments, reject overpayments, and undo a payment with a preserved correction history.
 - Temporary vaults keep one or more event expenses. Permanent vaults provide a reusable home for recurring events, with the previous roster carried into the next form.
+- Event creation uses the native iOS/Android date picker, defaulted to local today, with a browser date input in the web preview. Dates stay calendar-only strings; vaults remain date-free containers.
 - Each event has its own date, total, participants, a selected self participant and payer. Equal splits assign remainder cents to participants in saved order. The payer covers their own share.
 - Football AED630 shared by14 including you is AED45 each. If you paid, the other13 owe AED585. When someone else paid, only your remaining share is included in your payable balance.
 - Archive/reactivate vaults without deletion. Archived unpaid amounts remain in your overview.
 
 Storage is local AsyncStorage on native devices and browser localStorage on web. Local ledger data is not encrypted by this app. BetweenUs does not upload it or send reminders. There is no export/backup function yet: uninstalling, clearing data, changing browser, or losing the device can lose records. OS-level backups depend on your device settings. Failed writes show an error and do not publish unsaved changes; unreadable saved data is not silently replaced. Web preview assets still require the local preview server; no service worker is installed for cold-start offline browser use. Installed native runtime has not yet been exercised on a physical device.
+
+### Event date picker compatibility
+
+`@react-native-community/datetimepicker` is pinned to **9.2.1**, the version selected by `npx expo install` and listed in Expo58.0.25's installed `bundledNativeModules.json`. The package's [Expo users guidance](https://github.com/react-native-datetimepicker/datetimepicker#expo-users-notice) states it is included in Expo Go. Use an Expo Go version supporting this SDK; this standard picker needs no custom Expo Go binary. Existing custom development clients/native binaries need a rebuild after adding the native module. No build is submitted by installing it. No custom native styling/config plugin is required here.
+
+On iOS, choose a draft date and use **Use date**, or **Cancel** to keep the prior value. Android uses the native dialog's confirm/dismiss actions. Neither action submits the event. Event strings remain `YYYY-MM-DD`, using local calendar parts and local-noon picker values rather than UTC serialization. Other date fields and stored events are unchanged.
+
+Compatibility checks: `npx expo install --check @react-native-community/datetimepicker` passes. The full dependency check still reports the pre-existing React/React DOM19.3.1 versus Expo-expected19.3.0 warning; that unrelated baseline is not changed by this feature. Browser tests and native JS bundles are not physical iPhone/Android picker verification.
 
 ## Shared account mode and local API demo
 
@@ -72,5 +81,7 @@ Production export refuses an explicitly enabled demo flag. For the local browser
 `npm run export:auth-test` builds a fake-configuration web bundle into `dist-auth`; serve it on localhost:8082 and run `npm run test:auth-browser`. Every auth and API request is intercepted. It tests wrong codes, success, persistence, expired-session refresh, failed-signout stale-refresh isolation, and an old account request completing after a new account signs in. This sends no real email.
 
 `npm run export:offline-test` creates `dist-offline` with fake account configuration. Serve it on localhost:8083, then run `npm run test:offline-browser`. This blocks every external request, seeds a dormant account session, and verifies no auth requests; football630/14→585, overpayment rejection, partial/full payments, undo, reload persistence, archive/reactivation, multiple permanent events, and a personal borrowing repayment. Only local preview assets remain reachable. The four-tab smoke also checks local name grouping, separate directions, per-tab detail retention/back, storage-write failure/retry, mode switching and 320/430px layouts. Screenshots are saved under `/tmp/betweenus-tabs-home-320.png`, `/tmp/betweenus-tabs-home-430.png`, `/tmp/betweenus-tabs-people.png`, `/tmp/betweenus-tabs-event.png` and `/tmp/betweenus-tabs-settings.png`.
+
+For focused event-date web checks, serve `dist-offline` on localhost:8094 after `npm run export:offline-test`, then run `node scripts/event-date-smoke.cjs` (or set `EVENT_DATE_TEST_URL`). It checks local-day defaults near UTC midnight, the browser date fallback, dismissal, date persistence and320/430px layouts. Unit tests also cover date-only roundtrips across timezones/DST and unchanged legacy events.
 
 CI repeats unit tests (auth plus offline model/storage), type checking and a production web bundle. A web bundle does not verify iOS/Android device behavior. Exercise the two-person flow above on both device platforms before a pilot release.
