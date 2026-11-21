@@ -2,6 +2,10 @@
 
 Expo Router + React Native + TypeScript app for iOS, Android and a web preview. A restrained shared-debt record for friends and family. Pairs with the independent `betweenus-api` repository.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue-to-PR workflow, [AGENTS.md](AGENTS.md) for engineering standards, and the [independent review playbook](.agents/skills/review-pr/SKILL.md). Agent dispatch/review automation is not configured; deployments remain manual.
+
 ## Free offline mode
 
 Use Node 22+, run `npm ci`, then `npm run web` (or `npm run ios` / `npm run android` with a configured simulator). Choose **Use offline — free** on the first launch. No environment variables, backend, account, email or registration are needed. The selected mode is remembered on this device; **Switch mode** returns to the choice. Account code is lazy-loaded only after choosing account mode, so entering offline mode does not restore Supabase sessions or make auth/API requests. Existing offline data is never automatically transferred into account mode.
