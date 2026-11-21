@@ -35,11 +35,10 @@ import {
 import { createLedgerStore } from "./storage";
 import { Button, c, Choice, Field, s, Sheet } from "./ui";
 import OfflineOverview from "./OfflineOverview";
+import EventDateField from "./EventDateField";
+import { localCalendarDate } from "./eventDate";
 type Form = "record" | "vault" | "event" | "payment" | null;
-function today() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
+const today = localCalendarDate;
 export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const listRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const store = useMemo(() => createLedgerStore(AsyncStorage), []);
@@ -77,6 +76,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(today);
+  const [dateEditing, setDateEditing] = useState(false);
   const [note, setNote] = useState("");
   const [direction, setDirection] = useState<"lent" | "borrowed">("lent");
   const [kind, setKind] = useState<"temporary" | "permanent">("temporary");
@@ -144,6 +144,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     setName("");
     setAmount("");
     setDate(today());
+    setDateEditing(false);
     setNote("");
     setDirection("lent");
     setKind("temporary");
@@ -165,6 +166,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     if (busy) return;
     setError("");
     if (form) {
+      setDateEditing(false);
       setForm(null);
       return;
     }
@@ -911,11 +913,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
               placeholder="Football pitch"
               maxLength={200}
             />
-            <Field
-              label="Event date · YYYY-MM-DD"
+            <EventDateField
               value={date}
-              onChangeText={setDate}
-              maxLength={10}
+              onChange={setDate}
+              onEditingChange={setDateEditing}
+              disabled={busy}
             />
             <Field
               label="Event total · AED"
@@ -1002,15 +1004,17 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             title={
               busy
                 ? "Saving…"
-                : form === "payment"
-                  ? "Save payment"
-                  : form === "event"
-                    ? "Save event expense"
-                    : form === "vault"
-                      ? "Save vault"
-                      : "Save personal record"
+                : form === "event" && dateEditing
+                  ? "Finish choosing date"
+                  : form === "payment"
+                    ? "Save payment"
+                    : form === "event"
+                      ? "Save event expense"
+                      : form === "vault"
+                        ? "Save vault"
+                        : "Save personal record"
             }
-            disabled={busy}
+            disabled={busy || (form === "event" && dateEditing)}
             onPress={() => void submit()}
           />
         )}
