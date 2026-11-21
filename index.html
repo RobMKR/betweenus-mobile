@@ -1,0 +1,1386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>BetweenUs · offline HTML demo</title>
+    <style>
+      :root {
+        --ink: #203b35;
+        --green: #176b50;
+        --muted: #71817a;
+        --paper: #f7f8f3;
+        --line: #dfe6dc;
+        --pale: #eaf2eb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          15px/1.55 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible,
+      select:focus-visible {
+        outline: 3px solid #ba9b58;
+        outline-offset: 3px;
+      }
+      .shell {
+        max-width: 1060px;
+        margin: auto;
+        padding: 26px 28px 48px;
+      }
+      .top,
+      .row {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .between {
+        justify-content: space-between;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        font-size: 25px;
+        font-weight: 750;
+        letter-spacing: -0.8px;
+      }
+      .mark {
+        width: 42px;
+        height: 42px;
+        flex-shrink: 0;
+      }
+      .demo {
+        background: #ede8d9;
+        color: #675932;
+        text-align: center;
+        padding: 9px 18px;
+        font-size: 12px;
+      }
+      .subtle {
+        color: var(--muted);
+      }
+      .small {
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .eyebrow {
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 1.6px;
+        color: var(--green);
+      }
+      h1 {
+        font-size: 42px;
+        line-height: 1.14;
+        letter-spacing: -1.7px;
+        font-weight: 650;
+        max-width: 600px;
+        margin: 15px 0;
+      }
+      h2 {
+        font-size: 22px;
+        letter-spacing: -0.6px;
+        margin: 0;
+      }
+      h3 {
+        font-size: 17px;
+        margin: 0;
+      }
+      p {
+        margin: 0;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 13px 17px;
+        background: var(--green);
+        color: white;
+        font-weight: 650;
+      }
+      .secondary {
+        background: var(--pale);
+        color: var(--green);
+      }
+      .link {
+        background: transparent;
+        color: var(--green);
+        padding: 7px 0;
+        font-size: 13px;
+      }
+      .pill {
+        border-radius: 24px;
+        background: var(--pale);
+        color: var(--green);
+        padding: 10px 17px;
+      }
+      .pill.active {
+        background: var(--green);
+        color: white;
+      }
+      .intro {
+        margin: 32px 0 24px;
+      }
+      .overview {
+        background: var(--ink);
+        border-radius: 24px;
+        padding: 28px;
+        color: white;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+        margin: 24px 0 28px;
+      }
+      .overview .eyebrow,
+      .overview .small {
+        color: #bdd1c3;
+      }
+      .overview .wide {
+        grid-column: 1/-1;
+      }
+      .overview strong {
+        display: block;
+        font-size: 32px;
+        font-weight: 600;
+        letter-spacing: -0.9px;
+        margin-top: 7px;
+        overflow-wrap: anywhere;
+      }
+      .content {
+        margin-top: 24px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin: 20px 0;
+      }
+      .card {
+        border: 1px solid var(--line);
+        background: white;
+        border-radius: 18px;
+        padding: 21px;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .card > * + * {
+        margin-top: 10px;
+      }
+      .card.clickable {
+        cursor: pointer;
+        text-align: left;
+        color: var(--ink);
+        font-weight: 400;
+        width: 100%;
+      }
+      .card.clickable:hover {
+        border-color: #82ad95;
+      }
+      .stack {
+        display: grid;
+        gap: 18px;
+      }
+      .amount {
+        font-size: 36px;
+        font-weight: 650;
+        letter-spacing: -1px;
+        overflow-wrap: anywhere;
+      }
+      .balance-note {
+        padding: 20px;
+        background: var(--pale);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        display: grid;
+        gap: 8px;
+      }
+      .tag {
+        font-size: 10px;
+        letter-spacing: 1px;
+        font-weight: 750;
+        color: var(--green);
+      }
+      .history {
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+        margin-top: 12px;
+        font-size: 12px;
+      }
+      .notice {
+        padding: 15px;
+        border-radius: 12px;
+        background: #fff1dc;
+        color: #765022;
+        font-size: 13px;
+        margin: 16px 0;
+      }
+      .error {
+        background: #fff0ed;
+        color: #a33131;
+        padding: 12px;
+        border-radius: 10px;
+        white-space: pre-wrap;
+      }
+      .empty {
+        padding: 35px;
+        text-align: center;
+        color: var(--muted);
+      }
+      footer {
+        margin-top: 32px;
+        border-top: 1px solid var(--line);
+        padding-top: 20px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      dialog {
+        border: 0;
+        border-radius: 22px;
+        padding: 0;
+        background: var(--paper);
+        color: var(--ink);
+        width: calc(100% - 32px);
+        max-width: 570px;
+        max-height: 90dvh;
+        overflow: auto;
+        box-shadow: 0 18px 80px #203b3540;
+      }
+      dialog::backdrop {
+        background: #203b3566;
+      }
+      .form {
+        padding: 26px;
+        display: grid;
+        gap: 18px;
+      }
+      .field {
+        display: grid;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .field input,
+      .field textarea,
+      .field select {
+        width: 100%;
+        min-width: 0;
+        padding: 13px;
+        border: 1px solid #d5ded3;
+        border-radius: 11px;
+        background: white;
+        color: var(--ink);
+        font-size: 16px;
+        font-weight: 400;
+      }
+      .field textarea {
+        min-height: 112px;
+        resize: vertical;
+      }
+      .form .row > * {
+        flex: 1;
+      }
+      button,
+      input,
+      textarea,
+      select {
+        touch-action: manipulation;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        clip-path: inset(50%);
+        overflow: hidden;
+      }
+      .back {
+        margin: 24px 0 18px;
+      }
+      .section-head {
+        margin: 24px 0 12px;
+      }
+      .full {
+        width: 100%;
+      }
+      .intro .subtle {
+        max-width: 600px;
+      }
+      .history .row {
+        gap: 7px;
+      }
+      .warning {
+        color: #8b6028;
+      }
+      .details {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .details .grid {
+        grid-template-columns: 1fr;
+      }
+      .details h1 {
+        font-size: 30px;
+      }
+      .wrap {
+        overflow-wrap: anywhere;
+      }
+      .summary-head {
+        margin-bottom: 20px;
+      }
+      .footer-note {
+        background: var(--pale);
+        padding: 18px;
+        border-radius: 15px;
+        margin-top: 28px;
+      }
+      .nowrap {
+        white-space: nowrap;
+      }
+      @media (max-width: 600px) {
+        .shell {
+          padding: 22px 20px 36px;
+        }
+        .brand {
+          font-size: 23px;
+        }
+        .top {
+          gap: 9px;
+        }
+        .top .small {
+          display: none;
+        }
+        h1 {
+          font-size: 35px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .overview {
+          padding: 23px;
+          gap: 18px;
+        }
+        .overview strong {
+          font-size: 25px;
+        }
+        .overview .wide {
+          font-size: 11px;
+        }
+        .intro {
+          margin-top: 26px;
+        }
+        .card {
+          padding: 19px;
+        }
+        .form {
+          padding: 22px;
+        }
+        .row.between {
+          align-items: flex-start;
+        }
+        .amount {
+          font-size: 33px;
+        }
+        .brand .mark {
+          width: 39px;
+          height: 39px;
+        }
+      }
+      @media (max-width: 350px) {
+        .shell {
+          padding: 20px 15px;
+        }
+        .overview {
+          padding: 19px;
+          column-gap: 12px;
+        }
+        .overview strong {
+          font-size: 21px;
+        }
+        .brand {
+          font-size: 21px;
+        }
+        .top .link {
+          font-size: 11px;
+        }
+        .pill {
+          padding: 10px 12px;
+          font-size: 12px;
+        }
+        h1 {
+          font-size: 32px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo">
+      INTERACTIVE HTML DEMO · Sample data · Stored only in this browser
+    </div>
+    <div class="shell">
+      <header class="top between">
+        <div class="brand">
+          <svg class="mark" aria-hidden="true" viewBox="0 0 80 80">
+            <rect width="80" height="80" rx="22" fill="#174e3d" />
+            <path
+              d="M32 49V27a11 11 0 0 1 22 0v10M48 31v22a11 11 0 0 1-22 0V43"
+              fill="none"
+              stroke="#f5ecd4"
+              stroke-width="7"
+              stroke-linecap="round"
+            /></svg
+          >BetweenUs
+        </div>
+        <div class="row">
+          <span class="small">Offline mode · free</span
+          ><button class="link" data-action="reset">Reset sample demo</button>
+        </div>
+      </header>
+      <div id="banner" role="status"></div>
+      <main id="app"></main>
+      <footer>
+        Demo of BetweenUs offline records. No accounts, payments, messages,
+        syncing or uploads. Changes stay under a separate demo storage key.
+        Clearing browser data can lose them. Native app and account features are
+        outside this HTML preview.
+      </footer>
+    </div>
+    <dialog id="dialog">
+      <form id="form" class="form">
+        <div class="row between">
+          <h2 id="form-title"></h2>
+          <button
+            class="link"
+            type="button"
+            data-action="close"
+            aria-label="Close form"
+          >
+            Close ×
+          </button>
+        </div>
+        <div id="fields" class="stack"></div>
+        <div id="form-error" class="error" role="alert" hidden></div>
+        <button id="submit" type="submit">Save</button>
+      </form>
+    </dialog>
+    <script>
+      const Model=(()=>{/** Device-only ledger. Every amount is an integer AED minor unit. */
+                       
+             
+                      
+                    
+                      
+  
+                                                                   
+                           
+             
+               
+                                 
+                      
+               
+               
+                      
+  
+                     
+             
+                
+               
+                     
+                  
+                         
+                                      
+  
+                     
+             
+                
+                                  
+                    
+                  
+  
+                                                                             
+const emptyLedger = ()         => ({
+  version: 1,
+  records: [],
+  vaults: [],
+});
+const MAX_MINOR = 1_000_000_000;
+function id() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+}
+function text(value        , label        , max = 200)         {
+  const result = value.trim();
+  if (!result || result.length > max)
+    throw new Error(`${label} must be 1–${max} characters.`);
+  return result;
+}
+function validDate(value        )         {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    !Number.isFinite(Date.parse(`${value}T00:00:00Z`)) ||
+    new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value
+  )
+    throw new Error("Use a valid date in YYYY-MM-DD format.");
+  return value;
+}
+function validMinor(value        ) {
+  if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_MINOR)
+    throw new Error("Enter a positive amount up to AED 10,000,000.");
+  return value;
+}
+function historyFor(event       , personId        )            {
+  return Object.prototype.hasOwnProperty.call(event.payments, personId)
+    ? event.payments[personId]
+    : [];
+}
+function paid(payments           ) {
+  return payments.reduce((sum, p) => sum + p.amountMinor, 0);
+}
+function remaining(amountMinor        , payments           ) {
+  return amountMinor - paid(payments);
+}
+function addPayment(
+  amountMinor        ,
+  payments           ,
+  value        ,
+)            {
+  validMinor(value);
+  if (value > remaining(amountMinor, payments))
+    throw new Error("Payment cannot exceed the remaining amount.");
+  return [
+    ...payments,
+    { id: id(), amountMinor: value, createdAt: new Date().toISOString() },
+  ];
+}
+function undoPayment(payments           , paymentId        )            {
+  const original = payments.find((p) => p.id === paymentId);
+  if (
+    !original ||
+    original.amountMinor <= 0 ||
+    payments.some((p) => p.reversesId === paymentId)
+  )
+    throw new Error("This payment cannot be undone.");
+  return [
+    ...payments,
+    {
+      id: id(),
+      amountMinor: -original.amountMinor,
+      createdAt: new Date().toISOString(),
+      reversesId: paymentId,
+    },
+  ];
+}
+function participants(names          , selfIndex        )           {
+  if (names.length < 2 || names.length > 100)
+    throw new Error("Add 2–100 participants, including yourself.");
+  if (
+    !Number.isInteger(selfIndex) ||
+    selfIndex < 0 ||
+    selfIndex >= names.length
+  )
+    throw new Error("Select yourself in the participant list.");
+  const clean = names.map((name) => text(name, "Participant name", 80));
+  if (
+    new Set(clean.map((n) => n.normalize("NFKC").toLocaleLowerCase())).size !==
+    clean.length
+  )
+    throw new Error("Participant names must be unique.");
+  return clean.map((name, index) => ({
+    id: id(),
+    name,
+    isSelf: index === selfIndex,
+  }));
+}
+// Remainder cents go to participants in saved order; the payer keeps their own share.
+function split(
+  totalMinor        ,
+  people          ,
+)                         {
+  validMinor(totalMinor);
+  if (!people.length) throw new Error("Participants are required.");
+  const each = Math.floor(totalMinor / people.length),
+    extra = totalMinor % people.length;
+  return Object.fromEntries(
+    people.map((p, index) => [p.id, each + (index < extra ? 1 : 0)]),
+  );
+}
+function createEvent(input   
+                
+               
+                     
+                  
+                    
+                     
+ )        {
+  const people = participants(input.names, input.selfIndex);
+  if (!Number.isInteger(input.payerIndex) || !people[input.payerIndex])
+    throw new Error("Choose who paid.");
+  return {
+    id: id(),
+    title: text(input.title, "Event title"),
+    date: validDate(input.date),
+    totalMinor: validMinor(input.totalMinor),
+    payerId: people[input.payerIndex].id,
+    participants: people,
+    payments: {},
+  };
+}
+function eventRemaining(event       , personId        ) {
+  if (!event.participants.some((p) => p.id === personId))
+    throw new Error("Participant not found.");
+  return personId === event.payerId
+    ? 0
+    : remaining(
+        split(event.totalMinor, event.participants)[personId],
+        historyFor(event, personId),
+      );
+}
+function eventBalances(event       ) {
+  const self = event.participants.find((p) => p.isSelf) ;
+  return event.payerId === self.id
+    ? {
+        receivableMinor: event.participants.reduce(
+          (sum, p) => sum + eventRemaining(event, p.id),
+          0,
+        ),
+        payableMinor: 0,
+      }
+    : { receivableMinor: 0, payableMinor: eventRemaining(event, self.id) };
+}
+function eventPayment(
+  event       ,
+  personId        ,
+  value        ,
+)        {
+  if (personId === event.payerId)
+    throw new Error("The payer has no repayment due.");
+  eventRemaining(event, personId);
+  const share = split(event.totalMinor, event.participants)[personId];
+  return {
+    ...event,
+    payments: {
+      ...event.payments,
+      [personId]: addPayment(share, historyFor(event, personId), value),
+    },
+  };
+}
+function eventUndo(
+  event       ,
+  personId        ,
+  paymentId        ,
+)        {
+  return {
+    ...event,
+    payments: {
+      ...event.payments,
+      [personId]: undoPayment(historyFor(event, personId), paymentId),
+    },
+  };
+}
+function totals(ledger        ) {
+  let receivableMinor = 0,
+    payableMinor = 0;
+  for (const record of ledger.records) {
+    const value = remaining(record.amountMinor, record.payments);
+    if (record.direction === "lent") receivableMinor += value;
+    else payableMinor += value;
+  }
+  for (const vault of ledger.vaults) {
+    for (const event of vault.events) {
+      const balance = eventBalances(event);
+      receivableMinor += balance.receivableMinor;
+      payableMinor += balance.payableMinor;
+    }
+  }
+  return { receivableMinor, payableMinor };
+}
+function updateEvent(
+  ledger        ,
+  vaultId        ,
+  eventId        ,
+  change                         ,
+)         {
+  const vault = ledger.vaults.find((v) => v.id === vaultId);
+  if (!vault || vault.archived)
+    throw new Error("Reactivate this vault before changing events.");
+  if (!vault.events.some((e) => e.id === eventId))
+    throw new Error("Event not found.");
+  return {
+    ...ledger,
+    vaults: ledger.vaults.map((v) =>
+      v.id !== vaultId
+        ? v
+        : {
+            ...v,
+            events: v.events.map((e) => (e.id === eventId ? change(e) : e)),
+          },
+    ),
+  };
+}
+function validatePayments(amount        , items           ) {
+  if (!Array.isArray(items)) throw new Error("Invalid payment history.");
+  const seen = new Map                 ();
+  const reversed = new Set        ();
+  let balance = 0;
+  for (const p of items) {
+    text(p.id, "Payment ID");
+    if (
+      seen.has(p.id) ||
+      !Number.isSafeInteger(p.amountMinor) ||
+      p.amountMinor === 0 ||
+      !Number.isFinite(Date.parse(p.createdAt))
+    )
+      throw new Error("Invalid payment history.");
+    if (p.amountMinor < 0) {
+      const original = seen.get(p.reversesId || "");
+      if (
+        !original ||
+        original.amountMinor <= 0 ||
+        original.amountMinor !== -p.amountMinor ||
+        reversed.has(original.id)
+      )
+        throw new Error("Invalid payment correction.");
+      reversed.add(original.id);
+    } else if (p.reversesId) throw new Error("Invalid payment correction.");
+    balance += p.amountMinor;
+    if (balance < 0 || balance > amount)
+      throw new Error("Invalid payment balance.");
+    seen.set(p.id, p);
+  }
+}
+/** Refuse corrupt/unsupported data rather than replacing it with an empty ledger. */
+function validateLedger(value         )         {
+  const data = value          ;
+  if (
+    !data ||
+    data.version !== 1 ||
+    !Array.isArray(data.records) ||
+    !Array.isArray(data.vaults)
+  )
+    throw new Error("Unsupported or damaged local records.");
+  const ids = new Set        ();
+  function unique(value        ) {
+    text(value, "Record ID");
+    if (ids.has(value)) throw new Error("Duplicate local record ID.");
+    ids.add(value);
+  }
+  for (const r of data.records) {
+    unique(r.id);
+    text(r.name, "Name", 80);
+    if (
+      !["lent", "borrowed"].includes(r.direction) ||
+      typeof r.note !== "string" ||
+      r.note.length > 500
+    )
+      throw new Error("Invalid local record.");
+    validDate(r.date);
+    validMinor(r.amountMinor);
+    validatePayments(r.amountMinor, r.payments);
+  }
+  for (const v of data.vaults) {
+    unique(v.id);
+    text(v.title, "Vault title");
+    if (
+      !["temporary", "permanent"].includes(v.kind) ||
+      typeof v.archived !== "boolean" ||
+      !Array.isArray(v.events)
+    )
+      throw new Error("Invalid vault.");
+    for (const e of v.events) {
+      unique(e.id);
+      text(e.title, "Event title");
+      validDate(e.date);
+      validMinor(e.totalMinor);
+      if (
+        !Array.isArray(e.participants) ||
+        e.participants.filter((p) => p.isSelf === true).length !== 1 ||
+        e.participants.some((p) => typeof p.isSelf !== "boolean")
+      )
+        throw new Error("Invalid participants.");
+      participants(
+        e.participants.map((p) => p.name),
+        e.participants.findIndex((p) => p.isSelf),
+      );
+      const pids = new Set        ();
+      for (const p of e.participants) {
+        text(p.id, "Participant ID");
+        if (pids.has(p.id)) throw new Error("Duplicate participant ID.");
+        pids.add(p.id);
+      }
+      if (
+        !pids.has(e.payerId) ||
+        !e.payments ||
+        typeof e.payments !== "object" ||
+        Array.isArray(e.payments)
+      )
+        throw new Error("Invalid event payer.");
+      const shares = split(e.totalMinor, e.participants);
+      for (const [pid, history] of Object.entries(e.payments)) {
+        if (!pids.has(pid) || pid === e.payerId)
+          throw new Error("Invalid payment participant.");
+        validatePayments(shares[pid], history);
+      }
+    }
+  }
+  return data;
+}
+
+return {emptyLedger,createEvent,eventBalances,eventRemaining,eventPayment,eventUndo,historyFor,remaining,addPayment,undoPayment,totals,validateLedger,validMinor,validDate,text,id,split,updateEvent};})();
+      (() => {
+        "use strict";
+        const KEY = "betweenus.standalone-html-demo.v1";
+        let ledger,
+          tab = "records",
+          archive = false,
+          view = { type: "home" },
+          formState = null,
+          memoryOnly = false,
+          damaged = false,
+          storageMessage = "";
+        const $ = (id) => document.getElementById(id);
+        const esc = (value) =>
+          String(value ?? "").replace(
+            /[&<>"']/g,
+            (c) =>
+              ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+              })[c],
+          );
+        const money = (minor) =>
+          "AED " +
+          (minor / 100).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        const localDate = () => {
+          const d = new Date();
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        };
+        function sample() {
+          const event = Model.createEvent({
+            title: "Friday football · sample",
+            date: "2026-11-20",
+            totalMinor: 63000,
+            names: [
+              "You",
+              "Alex",
+              "John",
+              "Sam",
+              "Maya",
+              "Omar",
+              "Leah",
+              "Aisha",
+              "Ben",
+              "Noor",
+              "Daniel",
+              "Sara",
+              "Leo",
+              "Zara",
+            ],
+            selfIndex: 0,
+            payerIndex: 0,
+          });
+          return {
+            version: 1,
+            records: [
+              {
+                id: Model.id(),
+                name: "Maya · sample",
+                direction: "lent",
+                amountMinor: 8000,
+                date: "2026-11-19",
+                note: "Lunch for the group · sample record",
+                payments: [],
+              },
+              {
+                id: Model.id(),
+                name: "Sam · sample",
+                direction: "borrowed",
+                amountMinor: 3500,
+                date: "2026-11-18",
+                note: "Taxi home · sample record",
+                payments: [],
+              },
+            ],
+            vaults: [
+              {
+                id: Model.id(),
+                title: "Friday football · sample",
+                kind: "permanent",
+                archived: false,
+                events: [event],
+              },
+            ],
+          };
+        }
+        let raw = null;
+        try {
+          raw = localStorage.getItem(KEY);
+        } catch {
+          memoryOnly = true;
+          storageMessage =
+            "Browser storage is unavailable. This demo works in memory; changes will be lost when you close or reload it.";
+        }
+        if (raw !== null) {
+          try {
+            ledger = Model.validateLedger(JSON.parse(raw));
+          } catch {
+            damaged = true;
+            ledger = Model.emptyLedger();
+            storageMessage =
+              "Saved demo data could not be opened. It has not been overwritten. Reset sample demo to explicitly replace it.";
+          }
+        } else {
+          ledger = sample();
+          if (!memoryOnly) {
+            try {
+              localStorage.setItem(KEY, JSON.stringify(ledger));
+            } catch {
+              memoryOnly = true;
+              storageMessage =
+                "Browser storage is unavailable. This demo works in memory; changes will be lost when you close or reload it.";
+            }
+          }
+        }
+
+        function commit(next) {
+          if (damaged)
+            throw new Error(
+              "Saved demo data is unreadable. Reset it explicitly before making changes.",
+            );
+          Model.validateLedger(next);
+          if (!memoryOnly) {
+            try {
+              localStorage.setItem(KEY, JSON.stringify(next));
+            } catch {
+              memoryOnly = true;
+              storageMessage =
+                "Storage could not save your changes. Continuing in memory only: changes from now on will be lost on reload. Existing saved demo data has not been replaced.";
+            }
+          }
+          ledger = next;
+        }
+        function button(title, action, attrs = "", secondary = false) {
+          return `<button class="${secondary ? "secondary" : ""}" data-action="${action}" ${attrs}>${esc(title)}</button>`;
+        }
+        function field(label, name, value = "", type = "text", extra = "") {
+          return `<label class="field">${esc(label)}<input name="${name}" aria-label="${esc(label)}" type="${type}" value="${esc(value)}" ${extra}></label>`;
+        }
+        const findVault = () =>
+          ledger.vaults.find((v) => v.id === view.vaultId);
+        const findEvent = () =>
+          findVault()?.events.find((e) => e.id === view.eventId);
+        const findRecord = () =>
+          ledger.records.find((r) => r.id === view.recordId);
+        function histories(items, personId = "") {
+          return items.length
+            ? items
+                .map(
+                  (p) =>
+                    `<div class="history"><div class="row between"><strong>${p.amountMinor < 0 ? "Correction" : "Payment recorded"} · ${money(Math.abs(p.amountMinor))}</strong>${p.amountMinor > 0 && !items.some((x) => x.reversesId === p.id) && !findVault()?.archived ? `<button class="link" data-action="undo" data-id="${esc(p.id)}" data-person="${esc(personId)}">Undo payment</button>` : ""}</div><span class="small">${esc(new Date(p.createdAt).toLocaleString())}${p.reversesId ? " · Original payment reversed" : ""}</span></div>`,
+                )
+                .join("")
+            : '<p class="small">No payments recorded yet.</p>';
+        }
+        function render() {
+          const total = Model.totals(ledger);
+          $("banner").innerHTML = storageMessage
+            ? `<div class="notice">${esc(storageMessage)}</div>`
+            : "";
+          let html = "";
+          if (view.type === "home") {
+            html = `<section class="intro"><div class="eyebrow">OFFLINE · FREE · SAMPLE LEDGER</div><h1>A little less to<br>keep in your head.</h1><p class="subtle">Your personal records and group expenses, in one quiet place.</p></section><section class="overview"><div class="eyebrow wide">REMAINING ON YOUR DEMO RECORDS</div><div><span class="small">Owed to you</span><strong id="receivable">${money(total.receivableMinor)}</strong></div><div><span class="small">You owe</span><strong>${money(total.payableMinor)}</strong></div><p class="small wide">Includes personal records and your share of all vaults, even archived ones. These are your notes, not confirmations from others.</p></section><nav class="row" aria-label="Record type"><button class="pill ${tab === "records" ? "active" : ""}" data-action="tab-records">Personal records</button><button class="pill ${tab === "vaults" ? "active" : ""}" data-action="tab-vaults">Vaults & events</button></nav><section class="content">`;
+            if (tab === "records") {
+              html +=
+                `<div class="row between"><h2>Personal records</h2>${button("+ Add record", "new-record")}</div><div class="grid">` +
+                ledger.records
+                  .map(
+                    (r) =>
+                      `<button class="card clickable" data-action="record" data-id="${esc(r.id)}"><div class="row between"><h3>${esc(r.name)}</h3><strong>${money(Model.remaining(r.amountMinor, r.payments))}</strong></div><p class="small">${r.direction === "lent" ? "Owes you" : "You owe"} · ${esc(r.date)}${Model.remaining(r.amountMinor, r.payments) === 0 ? " · Settled" : ""}</p><p class="subtle">${esc(r.note)}</p></button>`,
+                  )
+                  .join("") +
+                "</div>";
+              if (!ledger.records.length)
+                html +=
+                  '<p class="empty">No personal records yet. Use a name to remember a little loan.</p>';
+            } else {
+              const shown = ledger.vaults.filter((v) => v.archived === archive);
+              html +=
+                `<div class="row between"><h2>Your vaults</h2>${button("+ Create vault", "new-vault")}</div><div class="row" style="margin-top:16px"><button class="pill ${!archive ? "active" : ""}" data-action="active">Active vaults</button><button class="pill ${archive ? "active" : ""}" data-action="archived">Archived vaults</button></div><div class="grid">` +
+                shown
+                  .map(
+                    (v) =>
+                      `<button class="card clickable" data-action="vault" data-id="${esc(v.id)}"><h3>${esc(v.title)}</h3><div class="tag">${v.kind === "permanent" ? "PERMANENT · REUSABLE" : "TEMPORARY"}${v.archived ? " · ARCHIVED" : ""}</div><p class="small">${v.events.length} event${v.events.length === 1 ? "" : "s"} · Owed to you ${money(v.events.reduce((sum, e) => sum + Model.eventBalances(e).receivableMinor, 0))}</p></button>`,
+                  )
+                  .join("") +
+                "</div>";
+              if (!shown.length)
+                html +=
+                  '<p class="empty">No vaults here. Create a home for the next shared moment.</p>';
+            }
+            html +=
+              '</section><aside class="footer-note small">Try the sample football vault: AED630 split between14 including you means AED45 each, and the other13 owe AED585. Demo records are separate from the real app.</aside>';
+          } else if (view.type === "record") {
+            const r = findRecord();
+            html = `<section class="details"><button class="link back" data-action="home">‹ Personal records</button><div class="eyebrow">${r.direction === "lent" ? "OWED TO YOU" : "YOU OWE"} · REMAINING</div><h1>${esc(r.name)}</h1><div class="amount">${money(Model.remaining(r.amountMinor, r.payments))}</div><p class="subtle" style="margin:16px 0">Original ${money(r.amountMinor)} · ${esc(r.date)}</p><p class="subtle">${esc(r.note)}</p>${Model.remaining(r.amountMinor, r.payments) > 0 ? `<div style="margin:22px 0">${button("Record repayment", "payment")}</div>` : ""}<h2 class="section-head">Repayment history</h2>${histories(r.payments)}</section>`;
+          } else if (view.type === "vault") {
+            const v = findVault();
+            html =
+              `<section class="details"><button class="link back" data-action="home">‹ Vaults & events</button><h1>${esc(v.title)}</h1><p class="tag">${v.kind === "permanent" ? "PERMANENT · REUSABLE" : "TEMPORARY"}${v.archived ? " · ARCHIVED" : ""}</p><p class="subtle" style="margin:16px 0">${v.archived ? "Archived for safekeeping. Unpaid balances and history are retained. Reactivate to make changes." : "Each event has its own date, participants, payer and repayments. Your last roster carries into the next form."}</p>${!v.archived ? button("Add event expense", "new-event") : ""}<h2 class="section-head">Event expenses · ${v.events.length}</h2><div class="grid">` +
+              v.events
+                .map(
+                  (e) =>
+                    `<button class="card clickable" data-action="event" data-id="${esc(e.id)}"><h3>${esc(e.title)}</h3><p class="small">${esc(e.date)} · ${money(e.totalMinor)} · ${e.participants.length} people</p><p>Owed to you ${money(Model.eventBalances(e).receivableMinor)} · You owe ${money(Model.eventBalances(e).payableMinor)}</p></button>`,
+                )
+                .join("") +
+              `</div>${button(v.archived ? "Reactivate vault" : "Archive vault", "archive", "", true)}<p class="small" style="margin-top:14px">Archive hides the vault from the active list. It never removes unpaid balances or deletes events.</p></section>`;
+          } else if (view.type === "event") {
+            const e = findEvent(),
+              v = findVault(),
+              b = Model.eventBalances(e),
+              shares = Model.split(e.totalMinor, e.participants),
+              self = e.participants.find((p) => p.isSelf);
+            html =
+              `<section class="details"><button class="link back" data-action="back-vault">‹ Back to vault</button><h1>${esc(e.title)}</h1><p class="subtle">${esc(e.date)} · Paid by ${esc(e.participants.find((p) => p.id === e.payerId).name)}</p><div class="amount" style="margin:18px 0">${money(e.totalMinor)}</div><div class="balance-note"><strong id="event-receivable">Owed to you · ${money(b.receivableMinor)}</strong><strong>You owe · ${money(b.payableMinor)}</strong><p class="small">${e.participants.length} shares. Your own share ${money(shares[self.id])} is included in the total, never added to what others owe you. Spare cents go in participant order.</p></div><h2 class="section-head">Participants & payments</h2><div class="grid">` +
+              e.participants
+                .map(
+                  (p) =>
+                    `<div class="card"><div class="row between"><h3>${esc(p.name)}${p.isSelf && p.name.toLowerCase() !== "you" ? " (you)" : ""}</h3><strong>${p.id === e.payerId ? "Payer" : money(Model.eventRemaining(e, p.id))}</strong></div><p class="small">Share ${money(shares[p.id])} · ${p.id === e.payerId ? "Paid original expense" : Model.eventRemaining(e, p.id) === 0 ? "Paid in full" : "remaining to payer"}</p>${p.id !== e.payerId && Model.eventRemaining(e, p.id) > 0 && !v.archived ? button("Record payment · " + p.name, "payment", `data-person="${esc(p.id)}"`, true) : ""}${p.id !== e.payerId ? histories(Model.historyFor(e, p.id), p.id) : ""}</div>`,
+                )
+                .join("") +
+              "</div></section>";
+          }
+          $("app").innerHTML = html;
+          if (damaged)
+            $("app")
+              .querySelectorAll("button")
+              .forEach((b) => (b.disabled = true));
+        }
+        function openForm(type, personId) {
+          formState = { type, personId };
+          $("form-error").hidden = true;
+          const r = findRecord(),
+            v = findVault(),
+            e = findEvent();
+          let fields = "",
+            title = "",
+            submit = "Save";
+          if (type === "record") {
+            title = "Add a personal record";
+            fields = `<label class="field">Direction<select name="direction" aria-label="Direction"><option value="lent">I lent money</option><option value="borrowed">I borrowed money</option></select></label>${field("Person's name", "name", "", "text", 'required maxlength="80"')}${field("Amount · AED", "amount", "", "text", 'required inputmode="decimal"')}${field("Date", "date", localDate(), "date", "required")}<label class="field">Note · optional<textarea name="note" maxlength="500"></textarea></label>`;
+          }
+          if (type === "vault") {
+            title = "Create a vault";
+            fields = `${field("Vault name", "name", "", "text", 'required maxlength="200"')}<label class="field">Vault type<select name="kind" aria-label="Vault type"><option value="temporary">Temporary · a trip or occasion</option><option value="permanent">Permanent · reusable group</option></select></label><p class="small">Both types keep one or more events. Nothing is automatically deleted.</p>`;
+          }
+          if (type === "event") {
+            title = "Add an event expense";
+            const prev = v.events[v.events.length - 1];
+            const names = prev
+              ? prev.participants.map((p) => p.name)
+              : ["You", "Alex"];
+            formState.selfName = prev
+              ? prev.participants.find((p) => p.isSelf).name
+              : "You";
+            formState.payerName = prev
+              ? prev.participants.find((p) => p.id === prev.payerId).name
+              : "You";
+            fields = `${field("Event title", "name", "", "text", 'required maxlength="200"')}${field("Event date", "date", localDate(), "date", "required")}${field("Event total · AED", "amount", "", "text", 'required inputmode="decimal"')}<label class="field">Participants · one name per line<textarea name="names" aria-label="Participants · one name per line" required maxlength="8100">${esc(names.join("\n"))}</textarea></label><label class="field">Which participant is you?<select name="self" aria-label="Which participant is you?" required></select></label><label class="field">Who paid the total?<select name="payer" aria-label="Who paid the total?" required></select></label><p class="small">2–100 unique names including you. Equal split with remainder cents assigned in saved order. Payer covers their own share.</p>`;
+          }
+          if (type === "payment") {
+            title = "Record a payment";
+            const due = r
+              ? Model.remaining(r.amountMinor, r.payments)
+              : Model.eventRemaining(e, personId);
+            formState.due = due;
+            fields = `<p class="subtle">Remaining ${money(due)}. Record money paid outside the app. This does not move money or contact anyone.</p>${field("Payment amount · AED", "amount", "", "text", 'required inputmode="decimal"')}<button class="secondary" type="button" data-action="full">Use full remaining · ${money(due)}</button>`;
+            submit = "Save payment";
+          }
+          $("form-title").textContent = title;
+          $("submit").textContent = submit;
+          $("fields").innerHTML = fields;
+          if (type === "event") {
+            updateSelectors();
+            $("fields")
+              .querySelector("textarea")
+              .addEventListener("input", updateSelectors);
+          }
+          $("dialog").showModal();
+        }
+        function updateSelectors() {
+          const names = $("form")
+            .elements.names.value.split("\n")
+            .map((n) => n.trim())
+            .filter(Boolean);
+          for (const [key, property] of [
+            ["self", "selfName"],
+            ["payer", "payerName"],
+          ]) {
+            const select = $("form").elements[key],
+              selected = formState[property];
+            select.innerHTML =
+              '<option value="">Choose a participant</option>' +
+              names
+                .map(
+                  (n, i) =>
+                    `<option value="${i}" ${n === selected ? "selected" : ""}>${esc(n)}</option>`,
+                )
+                .join("");
+            select.onchange = () => {
+              formState[property] =
+                select.value === "" ? undefined : names[Number(select.value)];
+            };
+          }
+        }
+        function parseAmount(value) {
+          if (!/^\d{1,9}(\.\d{1,2})?$/.test(value.trim()))
+            throw new Error(
+              "Enter a positive AED amount with up to 2 decimals.",
+            );
+          const [whole, cents = ""] = value.trim().split(".");
+          return Model.validMinor(
+            Number(whole) * 100 + Number(cents.padEnd(2, "0")),
+          );
+        }
+        $("form").addEventListener("submit", (event) => {
+          event.preventDefault();
+          try {
+            const data = Object.fromEntries(new FormData($("form"))),
+              v = findVault(),
+              e = findEvent(),
+              r = findRecord();
+            let next;
+            if (formState.type === "record") {
+              const record = {
+                id: Model.id(),
+                name: Model.text(data.name, "Name", 80),
+                direction: data.direction,
+                amountMinor: parseAmount(data.amount),
+                date: Model.validDate(data.date),
+                note: data.note.trim(),
+                payments: [],
+              };
+              next = { ...ledger, records: [record, ...ledger.records] };
+            }
+            if (formState.type === "vault") {
+              const vault = {
+                id: Model.id(),
+                title: Model.text(data.name, "Vault title"),
+                kind: data.kind,
+                archived: false,
+                events: [],
+              };
+              next = { ...ledger, vaults: [vault, ...ledger.vaults] };
+              commit(next);
+              view = { type: "vault", vaultId: vault.id };
+              tab = "vaults";
+              archive = false;
+              $("dialog").close();
+              render();
+              return;
+            }
+            if (formState.type === "event") {
+              if (v.archived) throw new Error("Reactivate the vault first.");
+              if (data.self === "" || data.payer === "")
+                throw new Error("Choose yourself and the payer.");
+              const created = Model.createEvent({
+                title: data.name,
+                date: data.date,
+                totalMinor: parseAmount(data.amount),
+                names: data.names
+                  .split("\n")
+                  .map((n) => n.trim())
+                  .filter(Boolean),
+                selfIndex: Number(data.self),
+                payerIndex: Number(data.payer),
+              });
+              next = {
+                ...ledger,
+                vaults: ledger.vaults.map((x) =>
+                  x.id === v.id ? { ...x, events: [...x.events, created] } : x,
+                ),
+              };
+              commit(next);
+              view = { type: "event", vaultId: v.id, eventId: created.id };
+              $("dialog").close();
+              render();
+              window.scrollTo(0, 0);
+              return;
+            }
+            if (formState.type === "payment") {
+              const value = parseAmount(data.amount);
+              next = r
+                ? {
+                    ...ledger,
+                    records: ledger.records.map((x) =>
+                      x.id === r.id
+                        ? {
+                            ...x,
+                            payments: Model.addPayment(
+                              x.amountMinor,
+                              x.payments,
+                              value,
+                            ),
+                          }
+                        : x,
+                    ),
+                  }
+                : Model.updateEvent(ledger, v.id, e.id, (event) =>
+                    Model.eventPayment(event, formState.personId, value),
+                  );
+            }
+            commit(next);
+            $("dialog").close();
+            render();
+          } catch (error) {
+            $("form-error").textContent = error.message;
+            $("form-error").hidden = false;
+          }
+        });
+        document.addEventListener("click", (event) => {
+          const target = event.target.closest("[data-action]");
+          if (!target) return;
+          const action = target.dataset.action;
+          try {
+            if (action === "close") {
+              $("dialog").close();
+              return;
+            }
+            if (action === "full") {
+              $("form").elements.amount.value = (formState.due / 100).toFixed(
+                2,
+              );
+              return;
+            }
+            if (action === "reset") {
+              if (
+                !confirm(
+                  "Replace all changes in this HTML demo with fresh sample data? This does not affect the real app.",
+                )
+              )
+                return;
+              damaged = false;
+              storageMessage = "";
+              memoryOnly = false;
+              commit(sample());
+              view = { type: "home" };
+              tab = "records";
+              archive = false;
+            }
+            if (action === "tab-records") {
+              tab = "records";
+              view = { type: "home" };
+            }
+            if (action === "tab-vaults") {
+              tab = "vaults";
+              view = { type: "home" };
+            }
+            if (action === "active") archive = false;
+            if (action === "archived") archive = true;
+            if (action === "home") view = { type: "home" };
+            if (action === "record")
+              view = { type: "record", recordId: target.dataset.id };
+            if (action === "vault")
+              view = { type: "vault", vaultId: target.dataset.id };
+            if (action === "event")
+              view = { ...view, type: "event", eventId: target.dataset.id };
+            if (action === "back-vault")
+              view = { type: "vault", vaultId: view.vaultId };
+            if (action === "new-record") {
+              openForm("record");
+              return;
+            }
+            if (action === "new-vault") {
+              openForm("vault");
+              return;
+            }
+            if (action === "new-event") {
+              openForm("event");
+              return;
+            }
+            if (action === "payment") {
+              openForm("payment", target.dataset.person);
+              return;
+            }
+            if (action === "archive") {
+              const v = findVault();
+              commit({
+                ...ledger,
+                vaults: ledger.vaults.map((x) =>
+                  x.id === v.id ? { ...x, archived: !x.archived } : x,
+                ),
+              });
+            }
+            if (action === "undo") {
+              const r = findRecord(),
+                v = findVault(),
+                e = findEvent();
+              commit(
+                r
+                  ? {
+                      ...ledger,
+                      records: ledger.records.map((x) =>
+                        x.id === r.id
+                          ? {
+                              ...x,
+                              payments: Model.undoPayment(
+                                x.payments,
+                                target.dataset.id,
+                              ),
+                            }
+                          : x,
+                      ),
+                    }
+                  : Model.updateEvent(ledger, v.id, e.id, (x) =>
+                      Model.eventUndo(
+                        x,
+                        target.dataset.person,
+                        target.dataset.id,
+                      ),
+                    ),
+              );
+            }
+            render();
+            if (
+              ["record", "vault", "event", "home", "back-vault"].includes(
+                action,
+              )
+            )
+              window.scrollTo(0, 0);
+          } catch (error) {
+            storageMessage = error.message;
+            render();
+          }
+        });
+        render();
+      })();
+    </script>
+  </body>
+</html>
