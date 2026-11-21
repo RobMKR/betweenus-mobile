@@ -304,6 +304,7 @@ function DebtHome({
   function selectTab(next: Tab) {
     if (creating) return;
     if (next === "people") {
+      setSavedId(null);
       setDetails((current) => ({ ...current, people: null }));
       setPerson(null);
       setAllRequests(false);

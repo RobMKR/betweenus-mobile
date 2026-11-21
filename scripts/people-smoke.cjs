@@ -126,7 +126,8 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   await button("Save person").click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   await page.getByText("Owed to you · AED 0.00", { exact: true }).waitFor();
-  await button("‹ Back to People").click();
+  await tab("People");
+  await expect(button("+ Add person")).toBeVisible();
   for (const width of [320, 430]) {
     await page.setViewportSize({ width, height: 932 });
     assert.ok(
@@ -310,7 +311,10 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   ).toHaveValue("");
   await account.getByLabel("Close", { exact: true }).click();
   await at("People");
-  await ab("‹ Back to People").click();
+  await expect(ab("+ Add person")).toBeVisible();
+  await ab("Open saved person Account Sam, borrower@example.com").click();
+  await at("People");
+  await expect(ab("+ Add person")).toBeVisible();
   await account.screenshot({
     path: "/tmp/betweenus-saved-people-account.png",
     fullPage: false,
