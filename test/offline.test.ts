@@ -171,7 +171,7 @@ test("malformed saved repayments and unsupported versions are refused", () => {
     /balance/,
   );
   assert.throws(
-    () => validateLedger({ version: 2, records: [], vaults: [] }),
+    () => validateLedger({ version: 99, records: [], vaults: [] }),
     /Unsupported/,
   );
 });

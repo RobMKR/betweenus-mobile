@@ -36,6 +36,7 @@ export function localPeople(records: LocalRecord[]) {
 }
 export type DetailPath = {
   personKey?: string;
+  savedPersonId?: string;
   recordId?: string;
   vaultId?: string;
   eventId?: string;
@@ -49,6 +50,6 @@ export function backPath(path: DetailPath): DetailPath | null {
     const { eventId, ...parent } = path;
     return parent;
   }
-  if (path.vaultId || path.personKey) return {};
+  if (path.vaultId || path.personKey || path.savedPersonId) return {};
   return null;
 }

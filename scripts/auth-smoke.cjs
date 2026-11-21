@@ -127,6 +127,7 @@ const session = (email) => ({
       disputed = true;
       return json({ debt: pending("dispute") });
     }
+    if (url.endsWith("/people")) return json({ people: [] });
     if (url.endsWith("/me"))
       return json({
         id: alice ? userA : userB,

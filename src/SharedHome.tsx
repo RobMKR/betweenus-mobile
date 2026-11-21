@@ -18,6 +18,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { amountToMinor, Balance, Debt, DEMO, money, request } from "./api";
 import AuthGate from "./AuthGate";
 import MobileShell, { Tab } from "./navigation/MobileShell";
+import PersonEditor from "./people/PersonEditor";
+import { SavedPeopleList, SavedPersonDetails } from "./people/PeopleViews";
+import {
+  personRequest,
+  validateSavedPerson,
+  type SavedPerson,
+  type PersonInput,
+} from "./people/model";
 import {
   accountPeople,
   confirmedPersonBalances,
@@ -92,6 +100,67 @@ function DebtHome({
   }
   const [person, setPerson] = useState<string | null>(null);
   const [allRequests, setAllRequests] = useState(false);
+  const [savedPeople, setSavedPeople] = useState<SavedPerson[]>([]);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [personEditor, setPersonEditor] = useState(false);
+  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [peopleCreating, setPeopleCreating] = useState(false);
+  const [peopleError, setPeopleError] = useState("");
+  const selectedSaved = savedPeople.find((p) => p.id === savedId);
+  async function loadSavedPeople() {
+    const operationToken = token;
+    setPeopleLoading(true);
+    setPeopleError("");
+    try {
+      const result = await request<{ people: SavedPerson[] }>("/people", token);
+      const people = result.people.map(validateSavedPerson);
+      if (active.current && requestIdentity.current === operationToken)
+        setSavedPeople(people);
+    } catch (e) {
+      if (active.current && requestIdentity.current === operationToken)
+        setPeopleError((e as Error).message);
+    } finally {
+      if (active.current && requestIdentity.current === operationToken)
+        setPeopleLoading(false);
+    }
+  }
+  useEffect(() => {
+    setSavedPeople([]);
+    setSavedId(null);
+    setPersonEditor(false);
+    setPeopleCreating(false);
+    void loadSavedPeople();
+  }, [token]);
+  async function addSavedPerson(input: PersonInput) {
+    const body = personRequest(input),
+      operationToken = token;
+    setPeopleCreating(true);
+    setPeopleError("");
+    try {
+      const result = await request<{ person: SavedPerson }>(
+        "/people",
+        token,
+        body,
+      );
+      const person = validateSavedPerson(result.person);
+      if (!active.current || requestIdentity.current !== operationToken)
+        return false;
+      setSavedPeople((previous) => [...previous, person]);
+      setSavedId(person.id);
+      setPerson(null);
+      setAllRequests(false);
+      setPersonEditor(false);
+      return true;
+    } catch (e) {
+      if (active.current && requestIdentity.current === operationToken)
+        setPeopleError((e as Error).message);
+      return false;
+    } finally {
+      if (active.current && requestIdentity.current === operationToken)
+        setPeopleCreating(false);
+    }
+  }
+
   const [creating, setCreating] = useState(false);
   const listRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [email, setEmail] = useState("");
@@ -251,6 +320,10 @@ function DebtHome({
       setError("");
       return true;
     }
+    if (tab === "people" && savedId) {
+      setSavedId(null);
+      return true;
+    }
     if (tab === "people" && (person || allRequests)) {
       setPerson(null);
       setAllRequests(false);
@@ -268,7 +341,7 @@ function DebtHome({
       back,
     );
     return () => subscription.remove();
-  }, [tab, detail, person, allRequests]);
+  }, [tab, detail, person, allRequests, savedId]);
   function button(
     title: string,
     action: () => void,
@@ -529,6 +602,7 @@ function DebtHome({
                   () => {
                     setAllRequests(true);
                     setPerson(null);
+                    setSavedId(null);
                     setFilter("all");
                     setDetails((current) => ({ ...current, people: null }));
                     navigate("people");
@@ -542,114 +616,173 @@ function DebtHome({
                 </Text>
               </>
             ) : tab === "people" ? (
-              <>
-                {(selected || allRequests) &&
-                  button(
-                    "‹ All people",
-                    () => {
-                      setPerson(null);
-                      setAllRequests(false);
-                      setDetail(null);
-                    },
-                    true,
-                    false,
-                  )}
-                <Text style={s.title}>
-                  {selected
-                    ? "Your shared records"
-                    : allRequests
-                      ? "All requests"
-                      : "People"}
-                </Text>
-                {selected && <Text style={s.body}>{selected.email}</Text>}
-                <Text style={s.body}>
-                  Existing requests grouped by counterparty account or
-                  invitation email.
-                </Text>
-                {button("Add debt", startCreate, false, busy || !me)}
-                {filters()}
-                {selected ? (
-                  <>
-                    {confirmedPersonBalances(selected.debts, me?.id).map(
-                      (balance) => (
-                        <View key={balance.currency} style={s.card}>
-                          <Text style={s.label}>
-                            Confirmed only · {balance.currency}
-                          </Text>
-                          <Text style={s.body}>
-                            Owed to you{" "}
-                            {money(balance.receivableMinor, balance.currency)}
-                          </Text>
-                          <Text style={s.body}>
-                            You owe{" "}
-                            {money(balance.payableMinor, balance.currency)}
-                          </Text>
-                        </View>
-                      ),
-                    )}
-                    {rows(filtered(selected.debts))}
-                  </>
-                ) : allRequests ? (
-                  rows(filtered(sorted))
-                ) : (
-                  <>
-                    {[...groups.values()]
-                      .filter((group) => filtered(group.debts).length > 0)
-                      .map((group) => (
-                        <Pressable
-                          key={group.key}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Open person ${group.email}`}
-                          onPress={() => setPerson(group.key)}
-                          style={s.card}
-                        >
-                          <View style={s.rowBetween}>
-                            <Text style={[s.cardTitle, { flex: 1 }]}>
-                              {group.email}
-                            </Text>
-                            <Ionicons
-                              name="chevron-forward"
-                              size={18}
-                              color={colors.muted}
-                            />
-                          </View>
-                          <Text style={s.small}>
-                            {group.debts.length} request
-                            {group.debts.length === 1 ? "" : "s"} ·{" "}
-                            {
-                              group.debts.filter((d) => d.status === "pending")
-                                .length
-                            }{" "}
-                            pending ·{" "}
-                            {
-                              group.debts.filter((d) => d.status === "disputed")
-                                .length
-                            }{" "}
-                            need resolution
-                          </Text>
-                        </Pressable>
-                      ))}
-                    {loaded &&
-                      ![...groups.values()].some(
-                        (g) => filtered(g.debts).length,
-                      ) && (
-                        <View style={s.card}>
-                          <Text style={s.cardTitle}>No people here yet</Text>
-                          <Text style={s.body}>
-                            Add a debt or change the filter to find your
-                            existing requests.
-                          </Text>
-                        </View>
-                      )}
-                    {button(
-                      "All requests",
-                      () => setAllRequests(true),
+              selectedSaved ? (
+                <SavedPersonDetails
+                  person={selectedSaved}
+                  onBack={() => setSavedId(null)}
+                  onDebt={() => {
+                    setEmail(selectedSaved.email || "");
+                    startCreate();
+                  }}
+                >
+                  <Text style={s.small}>
+                    The debt form requires an explicit email and borrower
+                    confirmation. Saved details do not verify an account or link
+                    earlier requests.
+                  </Text>
+                </SavedPersonDetails>
+              ) : (
+                <>
+                  {(selected || allRequests) &&
+                    button(
+                      "‹ All people",
+                      () => {
+                        setPerson(null);
+                        setAllRequests(false);
+                        setDetail(null);
+                      },
                       true,
                       false,
                     )}
-                  </>
-                )}
-              </>
+                  {!selected && !allRequests && (
+                    <>
+                      <SavedPeopleList
+                        people={savedPeople}
+                        onSelect={(id) => {
+                          setSavedId(id);
+                          setDetail(null);
+                        }}
+                        onAdd={() => {
+                          setPeopleError("");
+                          setPersonEditor(true);
+                        }}
+                        disabled={peopleLoading || peopleCreating}
+                      />
+                      {peopleLoading && (
+                        <ActivityIndicator
+                          accessibilityLabel="Loading saved people"
+                          color={colors.green}
+                        />
+                      )}
+                      <Text style={s.sectionTitle}>
+                        Existing debt counterparties
+                      </Text>
+                    </>
+                  )}
+                  {!!peopleError && (
+                    <>
+                      <Text accessibilityRole="alert" style={s.error}>
+                        {peopleError}
+                      </Text>
+                      {button(
+                        "Retry saved people",
+                        () => void loadSavedPeople(),
+                        true,
+                        false,
+                      )}
+                    </>
+                  )}
+                  {(selected || allRequests) && (
+                    <Text style={s.title}>
+                      {selected
+                        ? "Your shared records"
+                        : allRequests
+                          ? "All requests"
+                          : "People"}
+                    </Text>
+                  )}
+                  {selected && <Text style={s.body}>{selected.email}</Text>}
+                  <Text style={s.body}>
+                    Existing requests grouped by counterparty account or
+                    invitation email.
+                  </Text>
+                  {button("Add debt", startCreate, false, busy || !me)}
+                  {filters()}
+                  {selected ? (
+                    <>
+                      {confirmedPersonBalances(selected.debts, me?.id).map(
+                        (balance) => (
+                          <View key={balance.currency} style={s.card}>
+                            <Text style={s.label}>
+                              Confirmed only · {balance.currency}
+                            </Text>
+                            <Text style={s.body}>
+                              Owed to you{" "}
+                              {money(balance.receivableMinor, balance.currency)}
+                            </Text>
+                            <Text style={s.body}>
+                              You owe{" "}
+                              {money(balance.payableMinor, balance.currency)}
+                            </Text>
+                          </View>
+                        ),
+                      )}
+                      {rows(filtered(selected.debts))}
+                    </>
+                  ) : allRequests ? (
+                    rows(filtered(sorted))
+                  ) : (
+                    <>
+                      {[...groups.values()]
+                        .filter((group) => filtered(group.debts).length > 0)
+                        .map((group) => (
+                          <Pressable
+                            key={group.key}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Open person ${group.email}`}
+                            onPress={() => setPerson(group.key)}
+                            style={s.card}
+                          >
+                            <View style={s.rowBetween}>
+                              <Text style={[s.cardTitle, { flex: 1 }]}>
+                                {group.email}
+                              </Text>
+                              <Ionicons
+                                name="chevron-forward"
+                                size={18}
+                                color={colors.muted}
+                              />
+                            </View>
+                            <Text style={s.small}>
+                              {group.debts.length} request
+                              {group.debts.length === 1 ? "" : "s"} ·{" "}
+                              {
+                                group.debts.filter(
+                                  (d) => d.status === "pending",
+                                ).length
+                              }{" "}
+                              pending ·{" "}
+                              {
+                                group.debts.filter(
+                                  (d) => d.status === "disputed",
+                                ).length
+                              }{" "}
+                              need resolution
+                            </Text>
+                          </Pressable>
+                        ))}
+                      {loaded &&
+                        ![...groups.values()].some(
+                          (g) => filtered(g.debts).length,
+                        ) && (
+                          <View style={s.card}>
+                            <Text style={s.cardTitle}>No people here yet</Text>
+                            <Text style={s.body}>
+                              Add a debt or change the filter to find your
+                              existing requests.
+                            </Text>
+                          </View>
+                        )}
+                      {button(
+                        "All requests",
+                        () => setAllRequests(true),
+                        true,
+                        false,
+                      )}
+                    </>
+                  )}
+                </>
+              )
             ) : tab === "vaults" ? (
               <>
                 <Text style={s.title}>Vaults</Text>
@@ -721,6 +854,13 @@ function DebtHome({
           </ScrollView>
         </KeyboardAvoidingView>
       </MobileShell>
+      <PersonEditor
+        visible={personEditor}
+        onClose={() => setPersonEditor(false)}
+        onSave={addSavedPerson}
+        busy={peopleCreating}
+        error={peopleError}
+      />
       <Modal
         visible={creating}
         animationType="slide"
