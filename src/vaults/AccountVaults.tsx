@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { BackHandler, Text, View } from "react-native";
 import { request } from "../api";
 import { Button, Choice, Field, Sheet, s } from "../offline/ui";
 import PersonEditor from "../people/PersonEditor";
@@ -140,6 +140,22 @@ export default function AccountVaults({
     setPersonEditor(false);
     void loadList();
   }, [rootRevision]);
+
+  useEffect(() => {
+    if (!detail || creating || managing || personEditor) return;
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (!busy) {
+          setDetail(null);
+          setError("");
+          void loadList();
+        }
+        return true;
+      },
+    );
+    return () => subscription.remove();
+  }, [detail, creating, managing, personEditor, busy]);
 
   const previousCreate = useRef(0);
   useEffect(() => {
