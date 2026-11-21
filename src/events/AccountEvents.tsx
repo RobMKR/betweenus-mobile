@@ -381,7 +381,14 @@ export default function AccountEvents(props: AccountEventsProps) {
               {visibleEvent.participants.map((participant, index) => (
                 <View key={participant.participantId} style={s.card}>
                   <Text style={s.cardTitle}>
-                    {participant.isSelf ? "You" : participant.name}
+                    {participant.isSelf
+                      ? "You"
+                      : participant.name
+                            .normalize("NFKC")
+                            .trim()
+                            .toLocaleLowerCase() === "you"
+                        ? `${participant.name} · saved person`
+                        : participant.name}
                   </Text>
                   <Text style={s.small}>
                     Participant {index + 1} · Share{" "}

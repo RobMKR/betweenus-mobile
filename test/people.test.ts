@@ -47,7 +47,7 @@ const old: Ledger = {
 test("v1 upgrade preserves old arrays, dates, archive and names without invented people or links", () => {
   const before = JSON.stringify(old),
     next = migrateLedger(old);
-  assert.equal(next.version, 2);
+  assert.equal(next.version, 3);
   assert.deepEqual(next.people, []);
   assert.equal(next.records, old.records);
   assert.equal(next.vaults, old.vaults);
@@ -72,7 +72,7 @@ test("migration is read-only until successful write; failed person save leaves v
   await assert.rejects(
     store.commit((current) => ({
       ...current,
-      version: 2,
+      version: 3,
       people: [person("one")],
     })),
     /Device full/,
@@ -81,11 +81,11 @@ test("migration is read-only until successful write; failed person save leaves v
   fail = false;
   const saved = await store.commit((current) => ({
     ...current,
-    version: 2,
+    version: 3,
     people: [person("one")],
   }));
   assert.equal(saved.people?.length, 1);
-  assert.equal(JSON.parse(disk).version, 2);
+  assert.equal(JSON.parse(disk).version, 3);
   assert.deepEqual(JSON.parse(disk).records, old.records);
 });
 test("same-name saved IDs stay separate and only explicit personal record links contribute", () => {
@@ -143,13 +143,13 @@ test("person privacy boundary normalizes only allowed fields, with one optional 
 });
 test("unsupported or malformed saved People never become an empty ledger", () => {
   assert.throws(
-    () => migrateLedger({ version: 3, records: [], vaults: [] }),
+    () => migrateLedger({ version: 99, records: [], vaults: [] }),
     /Unsupported/,
   );
   assert.throws(
     () =>
       migrateLedger({
-        version: 2,
+        version: 3,
         records: [],
         vaults: [],
         people: [{ ...person("one"), phone: 55 }],

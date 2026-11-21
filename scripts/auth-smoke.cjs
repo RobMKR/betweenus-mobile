@@ -134,6 +134,7 @@ const session = (email) => ({
         id: alice ? userA : userB,
         email: alice ? "alice@example.com" : "bob@example.com",
       });
+    if (url.endsWith("/vault-balances")) return json({ balances: [] });
     if (url.endsWith("/balances"))
       return json({
         balances: [

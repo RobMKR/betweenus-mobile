@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { BackHandler, Text, View } from "react-native";
-import { request } from "../api";
+import AccountEvents from "../events/AccountEvents";
+import { request, type Balance } from "../api";
 import { Button, Choice, Field, Sheet, s } from "../offline/ui";
 import PersonEditor from "../people/PersonEditor";
 import {
@@ -19,13 +20,20 @@ type Vault = {
   memberIds: string[];
   createdAt: string;
   updatedAt: string;
+  eventCount?: number;
+  balances?: Balance[];
 };
 type VaultDetail = {
   vault: Vault;
   members: SavedPerson[];
   history: {
     id: string;
-    action: "created" | "member_added" | "member_removed";
+    action:
+      | "created"
+      | "member_added"
+      | "member_removed"
+      | "archived"
+      | "reactivated";
     personId: string | null;
     actorId: string;
     createdAt: string;
@@ -39,6 +47,8 @@ export default function AccountVaults({
   onPersonCreated,
   rootRevision = 0,
   createRevision = 0,
+  onLedgerChanged,
+  onNavigate,
 }: {
   token: string;
   ownerId: string;
@@ -46,9 +56,13 @@ export default function AccountVaults({
   onPersonCreated: (person: SavedPerson) => void;
   rootRevision?: number;
   createRevision?: number;
+  onLedgerChanged?: () => void;
+  onNavigate?: () => void;
 }) {
   const [vaults, setVaults] = useState<Vault[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [detail, setDetail] = useState<VaultDetail | null>(null);
+  const selectedVaultId = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -76,6 +90,11 @@ export default function AccountVaults({
         items.findIndex((item) => item.id === p.id) === index,
     ),
   ];
+
+  function showDetail(value: VaultDetail | null) {
+    selectedVaultId.current = value?.vault.id ?? null;
+    setDetail(value);
+  }
 
   function current(generation: number, owner: string) {
     return (
@@ -111,7 +130,8 @@ export default function AccountVaults({
     saving.current = false;
     setBusy(false);
     setVaults([]);
-    setDetail(null);
+    showDetail(null);
+    setSelectedEventId(null);
     setCreating(false);
     setManaging(false);
     setPersonEditor(false);
@@ -126,6 +146,9 @@ export default function AccountVaults({
       epoch.current++;
     };
   }, [ownerId]);
+  useEffect(() => {
+    onNavigate?.();
+  }, [selectedEventId]);
   const previousRoot = useRef(rootRevision);
   useEffect(() => {
     if (previousRoot.current === rootRevision) return;
@@ -134,7 +157,8 @@ export default function AccountVaults({
     detailRequest.current++;
     saving.current = false;
     setBusy(false);
-    setDetail(null);
+    showDetail(null);
+    setSelectedEventId(null);
     setCreating(false);
     setManaging(false);
     setPersonEditor(false);
@@ -143,7 +167,8 @@ export default function AccountVaults({
 
   function backToList() {
     detailRequest.current++;
-    setDetail(null);
+    setSelectedEventId(null);
+    showDetail(null);
     void loadList();
   }
 
@@ -152,12 +177,15 @@ export default function AccountVaults({
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
-        if (!busy) backToList();
+        if (!busy) {
+          if (selectedEventId) setSelectedEventId(null);
+          else backToList();
+        }
         return true;
       },
     );
     return () => subscription.remove();
-  }, [detail, creating, managing, personEditor, busy]);
+  }, [detail, selectedEventId, creating, managing, personEditor, busy]);
 
   const previousCreate = useRef(0);
   useEffect(() => {
@@ -177,8 +205,15 @@ export default function AccountVaults({
         `/vaults/${encodeURIComponent(id)}`,
         latest.current.token,
       );
-      if (current(generation, owner) && sequence === detailRequest.current)
-        setDetail(result);
+      if (current(generation, owner) && sequence === detailRequest.current) {
+        if (detail?.vault.id !== id) onNavigate?.();
+        showDetail(result);
+        setVaults((previous) =>
+          previous.map((item) =>
+            item.id === result.vault.id ? result.vault : item,
+          ),
+        );
+      }
     } catch (e) {
       if (current(generation, owner) && sequence === detailRequest.current)
         setError((e as Error).message);
@@ -237,7 +272,7 @@ export default function AccountVaults({
         result.vault,
         ...items.filter((v) => v.id !== result.vault.id),
       ]);
-      setDetail(result);
+      showDetail(result);
       setCreating(false);
     } catch (e) {
       if (current(generation, owner))
@@ -285,7 +320,7 @@ export default function AccountVaults({
           );
           if (!current(generation, owner)) return;
           invalidateReads();
-          setDetail(result);
+          showDetail(result);
           setVaults((items) =>
             items.map((v) => (v.id === result.vault.id ? result.vault : v)),
           );
@@ -365,69 +400,98 @@ export default function AccountVaults({
     <View style={{ gap: 18 }}>
       {detail ? (
         <>
-          <Button
-            title="Back to vaults"
-            secondary
-            disabled={busy}
-            onPress={backToList}
-          />
-          <Text style={s.eyebrow}>{detail.vault.kind.toUpperCase()} VAULT</Text>
-          <Text style={s.title}>{detail.vault.title}</Text>
-          <Text style={s.body}>
-            Your private roster. Adding people grants no account access and
-            sends no invitation.
-          </Text>
-          <View style={s.card}>
-            <Text style={s.section}>Members · {detail.members.length}</Text>
-            <Text style={s.small}>You are included separately.</Text>
-            {!detail.members.length && (
-              <Text style={s.body}>No saved members yet.</Text>
-            )}
-            {detail.members.map((person, index) => (
-              <View key={person.id} style={{ gap: 4 }}>
-                <Text style={s.cardTitle}>{person.name}</Text>
-                <Text style={s.small}>
-                  {person.email || person.phone || `Saved person ${index + 1}`}
-                </Text>
+          {!selectedEventId && (
+            <>
+              <Button
+                title="Back to vaults"
+                secondary
+                disabled={busy}
+                onPress={backToList}
+              />
+              <Text style={s.eyebrow}>
+                {detail.vault.kind.toUpperCase()} VAULT
+              </Text>
+              <Text style={s.title}>{detail.vault.title}</Text>
+              <Text style={s.body}>
+                Your private roster. Adding people grants no account access and
+                sends no invitation.
+              </Text>
+              <View style={s.card}>
+                <Text style={s.section}>Members · {detail.members.length}</Text>
+                <Text style={s.small}>You are included separately.</Text>
+                {!detail.members.length && (
+                  <Text style={s.body}>No saved members yet.</Text>
+                )}
+                {detail.members.slice(0, 3).map((person, index) => (
+                  <View key={person.id} style={{ gap: 4 }}>
+                    <Text style={s.cardTitle}>{person.name}</Text>
+                    <Text style={s.small}>
+                      {person.email ||
+                        person.phone ||
+                        `Saved person ${index + 1}`}
+                    </Text>
+                  </View>
+                ))}
+                {detail.members.length > 3 && (
+                  <Text style={s.small}>
+                    {detail.members.length - 3} more members · Manage members to
+                    view everyone.
+                  </Text>
+                )}
+                <Button
+                  title="Manage members"
+                  secondary
+                  disabled={busy || detail.vault.archived}
+                  onPress={() => {
+                    setSelectedIds([...detail.vault.memberIds]);
+                    setDraftError("");
+                    setManaging(true);
+                  }}
+                />
               </View>
-            ))}
-            <Button
-              title="Manage members"
-              secondary
-              disabled={busy || detail.vault.archived}
-              onPress={() => {
-                setSelectedIds([...detail.vault.memberIds]);
-                setDraftError("");
-                setManaging(true);
-              }}
-            />
-          </View>
-          <View style={s.card}>
-            <Text style={s.section}>Events</Text>
-            <Text style={s.body}>
-              This roster will be the starting pool for event participants. The
-              guided event flow is coming in the linked event update.
-            </Text>
-            <Text style={s.small}>
-              Roster changes do not change participants, shares or payments
-              already saved in event history.
-            </Text>
-          </View>
-          <Text style={s.section}>Membership history</Text>
-          {detail.history.map((entry) => (
-            <View key={entry.id} style={s.history}>
-              <Text style={s.label}>
-                {entry.action === "created"
-                  ? "Vault created"
-                  : entry.action === "member_added"
-                    ? "Member added"
-                    : "Member removed"}
-              </Text>
-              <Text style={s.small}>
-                {new Date(entry.createdAt).toLocaleString()}
-              </Text>
-            </View>
-          ))}
+            </>
+          )}
+          <AccountEvents
+            token={token}
+            ownerId={ownerId}
+            vault={detail.vault}
+            people={allPeople}
+            onPersonCreated={onPersonCreated}
+            selectedEventId={selectedEventId}
+            onSelectEvent={(id) => {
+              if (selectedVaultId.current === detail.vault.id)
+                setSelectedEventId(id);
+            }}
+            onChanged={() => {
+              if (selectedVaultId.current !== detail.vault.id) return;
+              invalidateReads();
+              void openDetail(detail.vault.id);
+              onLedgerChanged?.();
+            }}
+          />
+          {!selectedEventId && (
+            <>
+              <Text style={s.section}>Membership history</Text>
+              {detail.history.map((entry) => (
+                <View key={entry.id} style={s.history}>
+                  <Text style={s.label}>
+                    {entry.action === "created"
+                      ? "Vault created"
+                      : entry.action === "member_added"
+                        ? "Member added"
+                        : entry.action === "member_removed"
+                          ? "Member removed"
+                          : entry.action === "archived"
+                            ? "Vault archived"
+                            : "Vault reactivated"}
+                  </Text>
+                  <Text style={s.small}>
+                    {new Date(entry.createdAt).toLocaleString()}
+                  </Text>
+                </View>
+              ))}
+            </>
+          )}
         </>
       ) : (
         <>

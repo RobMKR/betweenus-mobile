@@ -233,6 +233,8 @@ const event = {
           : { id: owner, email: "owner@example.com" },
       );
     if (path.endsWith("/debts")) return json({ debts: [] });
+    if (path.endsWith("/vault-balances")) return json({ balances: [] });
+    if (path.endsWith("/events")) return json({ events: [] });
     if (path.endsWith("/balances")) return json({ balances: [] });
     if (path.endsWith("/people")) return json({ people: saved });
     if (path === "/v1/vaults" && req.method() === "GET") {

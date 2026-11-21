@@ -250,12 +250,16 @@ function WizardSession({
     const person = byId.get(id);
     if (!person) return undefined;
     const matches = duplicates.get(person.name);
-    if (matches && matches.length > 1) {
-      return (
-        person.email ??
-        person.phone ??
-        `Saved person ${matches.indexOf(person) + 1}`
-      );
+    if (
+      (matches && matches.length > 1) ||
+      person.name.normalize("NFKC").trim().toLocaleLowerCase() === "you"
+    ) {
+      return [
+        person.email || person.phone,
+        `Saved person ${candidates.findIndex((candidate) => candidate.id === id) + 1}`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
     }
     return undefined;
   };
@@ -280,13 +284,25 @@ function WizardSession({
     );
   }
 
+  function back() {
+    if (locked || mutation.current) return;
+    setMessage("");
+    if (step > 0) setStep(step - 1);
+    else onClose();
+  }
   function close() {
     if (!locked && !mutation.current) onClose();
   }
 
   return (
     <>
-      <Sheet visible={!addingPerson} title="New event" onClose={close}>
+      <Sheet
+        visible={!addingPerson}
+        title="New event"
+        onClose={close}
+        scrollKey={step}
+        onRequestClose={back}
+      >
         <View style={styles.header}>
           <Text style={s.body}>{vaultTitle}</Text>
           <View
@@ -512,15 +528,7 @@ function WizardSession({
             />
           )}
           {step > 0 && (
-            <Button
-              title="Back"
-              secondary
-              disabled={locked}
-              onPress={() => {
-                setMessage("");
-                setStep(step - 1);
-              }}
-            />
+            <Button title="Back" secondary disabled={locked} onPress={back} />
           )}
           <Button title="Cancel" secondary disabled={locked} onPress={close} />
         </View>
