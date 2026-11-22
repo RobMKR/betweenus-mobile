@@ -58,6 +58,7 @@ export function createLocalEvent(
     totalMinor: input.totalMinor,
     payerId: input.payerId,
     splitMode: input.splitMode,
+    partialPayments: input.partialPayments,
     shares,
     participants,
     payments: {},

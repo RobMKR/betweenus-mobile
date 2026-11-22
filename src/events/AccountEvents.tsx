@@ -38,6 +38,7 @@ const ledgerRejections: Readonly<Record<string, number>> = {
   NOT_FOUND: 404,
   VAULT_ARCHIVED: 409,
   PAYER_PAYMENT: 409,
+  FULL_PAYMENT_REQUIRED: 409,
   OVERPAYMENT: 409,
 };
 
@@ -227,12 +228,18 @@ export default function AccountEvents(props: AccountEventsProps) {
       const rejected =
         e instanceof ApiRequestError &&
         ledgerRejections[e.code ?? ""] === e.status;
-      if (rejected) settle();
-      const message =
-        (e as Error).message +
-        (rejected
-          ? ""
-          : " The result is uncertain. Retry this request to confirm it or finish saving it.");
+      let message = (e as Error).message;
+      if (rejected) {
+        settle();
+        if (
+          !paying &&
+          (e.code === "FULL_PAYMENT_REQUIRED" || e.code === "OVERPAYMENT")
+        )
+          message += " Reload the event to see the current remaining share.";
+      } else {
+        message +=
+          " The result is uncertain. Retry this request to confirm it or finish saving it.";
+      }
       setError(message);
       if (intent.kind === "event") setWizardError(message);
       else setPaymentError(message);
@@ -309,16 +316,28 @@ export default function AccountEvents(props: AccountEventsProps) {
         await submitMoney(prior);
       return;
     }
-    if (latest.current.vault.archived) return;
-    const amountMinor = amountToMinor(amount);
-    const live = event.participants.find(
-      (p) => p.participantId === paying.participantId,
+    await recordPayment(event, paying.participantId, amountToMinor(amount));
+  }
+  async function recordPayment(
+    target: AccountEvent,
+    participantId: string,
+    amountMinor: number | null,
+  ) {
+    if (
+      latest.current.vault.archived ||
+      latest.current.selectedEventId !== target.id ||
+      unresolvedMoneyIntents.has(scope) ||
+      lock.current
+    )
+      return;
+    const participant = target.participants.find(
+      (p) => p.participantId === participantId,
     );
     if (
       !amountMinor ||
-      !live ||
-      live.participantId === event.payerId ||
-      amountMinor > live.remainingMinor
+      !participant ||
+      participantId === target.payerId ||
+      amountMinor > participant.remainingMinor
     ) {
       setPaymentError(
         "Enter a positive amount no greater than the remaining share.",
@@ -327,10 +346,10 @@ export default function AccountEvents(props: AccountEventsProps) {
     }
     await submitMoney({
       kind: "payment",
-      eventId: event.id,
-      eventTitle: event.title,
-      participantName: live.isSelf ? "you" : live.name,
-      body: { participantId: live.participantId, amountMinor },
+      eventId: target.id,
+      eventTitle: target.title,
+      participantName: participant.isSelf ? "you" : participant.name,
+      body: { participantId, amountMinor },
       clientRequestId: randomUUID(),
     });
   }
@@ -475,15 +494,34 @@ export default function AccountEvents(props: AccountEventsProps) {
                     {money(participant.remainingMinor)}
                     {participant.participantId === visibleEvent.payerId
                       ? " · Payer's own share"
-                      : ""}
+                      : participant.remainingMinor === 0
+                        ? " · Paid in full"
+                        : ""}
                   </Text>
                   {participant.participantId !== visibleEvent.payerId &&
                     participant.remainingMinor > 0 && (
                       <Button
-                        title={`Record payment for ${participant.isSelf ? "you" : participant.name}`}
+                        title={
+                          visibleEvent.partialPayments === false
+                            ? "Paid"
+                            : `Record payment for ${participant.isSelf ? "you" : participant.name}`
+                        }
+                        accessibilityLabel={
+                          visibleEvent.partialPayments === false
+                            ? `Mark ${participant.isSelf ? "your share" : participant.name} paid`
+                            : undefined
+                        }
                         secondary
                         disabled={busy || vault.archived || !!pending}
                         onPress={() => {
+                          if (visibleEvent.partialPayments === false) {
+                            void recordPayment(
+                              visibleEvent,
+                              participant.participantId,
+                              participant.remainingMinor,
+                            );
+                            return;
+                          }
                           setPaying(participant);
                           setAmount("");
                           setPaymentError("");

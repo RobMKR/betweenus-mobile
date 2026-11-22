@@ -76,6 +76,8 @@ const url = process.env.WIZARD_OFFLINE_URL || "http://localhost:8099";
   await field("Event title").fill("Manual training");
   await field("Event date").fill("2028-02-29");
   await field("Total amount (AED)").fill("100");
+  const toggle = page.getByRole("switch", { name: "Partial payments" });
+  await expect(toggle).not.toBeChecked();
   await page.screenshot({
     path: "/tmp/betweenus-wizard-details-430.png",
     fullPage: false,
@@ -116,6 +118,8 @@ const url = process.env.WIZARD_OFFLINE_URL || "http://localhost:8099";
   await expect(field("Event title")).toHaveValue("Manual training");
   await expect(field("Event date")).toHaveValue("2028-02-29");
   await field("Total amount (AED)").fill("110");
+  await toggle.check();
+  await expect(field("Total amount (AED)")).toHaveValue("110");
   await b("Next").click();
   await b("Next").click();
   await expect(field("You share (AED)")).toHaveValue("10");
@@ -187,6 +191,7 @@ const url = process.env.WIZARD_OFFLINE_URL || "http://localhost:8099";
   await b("Add event expense").click();
   await field("Event title").fill("Team only");
   await field("Total amount (AED)").fill("30");
+  await expect(toggle).not.toBeChecked();
   await b("Next").click();
   await page.getByRole("switch", { name: "Include me", exact: true }).uncheck();
   await b("Add a person").click();
@@ -204,6 +209,21 @@ const url = process.env.WIZARD_OFFLINE_URL || "http://localhost:8099";
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   await page.getByText("Owed to you · AED 30.00", { exact: true }).waitFor();
   await page.getByText(/Your own share AED 0.00/).waitFor();
+  const paid = b("Mark Player 1 paid");
+  await expect(paid).toHaveText("Paid");
+  await paid.evaluate((button) => {
+    button.click();
+    button.click();
+  });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByText("Owed to you · AED 27.85", { exact: true }).waitFor();
+  await expect(paid).toHaveCount(0);
+  await page
+    .getByText("Share AED 2.15 · Paid in full", { exact: true })
+    .waitFor();
+  await b("Undo payment").click();
+  await page.getByText("Owed to you · AED 30.00", { exact: true }).waitFor();
+  await expect(paid).toBeVisible();
   await page.reload();
   await tab("Vaults");
   await page.getByText("Weekly team", { exact: true }).click();
@@ -220,6 +240,12 @@ const url = process.env.WIZARD_OFFLINE_URL || "http://localhost:8099";
   assert.equal(disk.version, 3);
   assert.deepEqual(disk.vaults[0].events[0], old);
   assert.equal(disk.vaults[0].events[1].splitMode, "manual");
+  assert.equal(disk.vaults[0].events[1].partialPayments, true);
+  assert.equal(disk.vaults[0].events[2].partialPayments, false);
+  assert.deepEqual(
+    disk.vaults[0].events[2].payments.p1.map((payment) => payment.amountMinor),
+    [215, -215],
+  );
   assert.equal(disk.vaults[0].events[1].shares.p1, 4000);
   assert.equal(disk.vaults[0].events[1].payments.p1.length, 3);
   assert.equal(disk.people.length, 14);
@@ -238,7 +264,7 @@ const url = process.env.WIZARD_OFFLINE_URL || "http://localhost:8099";
   assert.deepEqual(external, []);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS guided offline wizard: Back/Next retained, manual reconciliation, include-self/payer validation, selected custom person, self-paid outside split, v2→v3 durable migration/failure retry, immutable legacy event, payment/full/undo/reload/archive,320/430,no external requests.",
+    "PASS guided offline wizard: Back/Next retained, manual reconciliation, include-self/payer validation, selected custom person, self-paid outside split, v2→v3 durable migration/failure retry, immutable legacy event, partial/full-only payment, double tap, undo/reload/archive,320/430,no external requests.",
   );
   await browser.close();
 })().catch((e) => {

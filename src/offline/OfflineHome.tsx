@@ -54,6 +54,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const listRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const store = useMemo(() => createLedgerStore(AsyncStorage), []);
   const active = useRef(true);
+  const saving = useRef(false);
   const [ledger, setLedger] = useState<Ledger>(emptyLedger);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -140,7 +141,8 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     };
   }, []);
   async function save(change: (current: Ledger) => Ledger, after?: () => void) {
-    if (busy) return;
+    if (busy || saving.current) return;
+    saving.current = true;
     setBusy(true);
     setError("");
     try {
@@ -157,6 +159,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
           `Not saved: ${(e as Error).message} Your last saved records are unchanged. Retry after checking device storage.`,
         );
     } finally {
+      saving.current = false;
       if (active.current) setBusy(false);
     }
   }
@@ -751,10 +754,31 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                   eventRemaining(event, p.id) > 0 &&
                   !vault.archived && (
                     <Button
-                      title={`Record payment · ${p.name}`}
+                      title={
+                        event.partialPayments === false
+                          ? "Paid"
+                          : `Record payment · ${p.name}`
+                      }
+                      accessibilityLabel={
+                        event.partialPayments === false
+                          ? `Mark ${p.name} paid`
+                          : undefined
+                      }
                       secondary
                       disabled={busy}
                       onPress={() => {
+                        if (event.partialPayments === false) {
+                          void save((current) =>
+                            updateEvent(current, vault.id, event.id, (live) =>
+                              eventPayment(
+                                live,
+                                p.id,
+                                eventRemaining(event, p.id),
+                              ),
+                            ),
+                          );
+                          return;
+                        }
                         setPersonId(p.id);
                         openForm("payment");
                       }}

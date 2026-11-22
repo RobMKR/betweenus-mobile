@@ -74,6 +74,7 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
   await page.getByLabel("Event title", { exact: true }).fill("Pitch booking");
   await page.getByLabel("Event date", { exact: true }).fill("2026-11-21");
   await page.getByLabel("Total amount (AED)", { exact: true }).fill("630");
+  await page.getByRole("switch", { name: "Partial payments" }).check();
   await button("Next").click();
   await page.getByText("14 participants", { exact: true }).waitFor();
   await button("Next").click();

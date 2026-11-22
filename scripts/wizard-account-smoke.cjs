@@ -22,6 +22,7 @@ const api = async (path, body, token = "demo-lender") => {
 const money = (value) =>
   `AED ${(value / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 (async () => {
+  const startedAt = Date.now();
   const health = await api("/health");
   assert.equal(health.mode, "local-demo");
   assert.equal(health.storage, "ephemeral-memory");
@@ -226,6 +227,9 @@ const money = (value) =>
     await field("Event title").fill("Pitch booking");
     await field("Event date").fill("2026-11-20");
     await field("Total amount (AED)").fill("630");
+    const toggle = page.getByRole("switch", { name: "Partial payments" });
+    await expect(toggle).not.toBeChecked();
+    await toggle.check();
     await b("Next").click();
     await page.getByText("14 participants", { exact: true }).waitFor();
     await b("Next").click();
@@ -256,6 +260,7 @@ const money = (value) =>
   let events = (await api(`/v1/vaults/${vault.id}/events`)).events;
   assert.equal(events.length, 1);
   assert.equal(events[0].balance.receivableMinor, 58500);
+  assert.equal(events[0].partialPayments, true);
   assert.equal(nonces.event.length, 2);
   assert.equal(nonces.event[0], nonces.event[1]);
   assert.match(nonces.event[0], /^[0-9a-f-]{36}$/);
@@ -411,6 +416,7 @@ const money = (value) =>
   assert.equal(savedEvents.length, 2);
   const manual = savedEvents.find((item) => item.title === "Manual sides");
   assert.equal(manual.splitMode, "manual");
+  assert.equal(manual.partialPayments, false);
   assert.equal(manual.payerId, "self");
   assert.equal(
     manual.participants.some((person) => person.isSelf),
@@ -424,6 +430,79 @@ const money = (value) =>
     savedEvents.find((item) => item.id === eventId).payments.length,
     4,
   );
+  // The local API limits each IP to 100 requests per minute. Both fixtures
+  // and browser requests share that IP, so begin the extended flow in a new window.
+  const cooldown = 61_000 - (Date.now() - startedAt);
+  if (cooldown > 0)
+    await new Promise((resolve) => setTimeout(resolve, cooldown));
+
+  const paid = b("Mark Player 1 paid");
+  await expect(paid).toHaveText("Paid");
+  failPayment = true;
+  const countBefore = nonces.payment.length;
+  await paid.evaluate((button) => {
+    button.click();
+    button.click();
+  });
+  await page.getByText("Payment save unconfirmed", { exact: true }).waitFor();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(paid).toBeDisabled();
+  assert.equal(nonces.payment.length, countBefore + 1);
+  await b("Back to events").click();
+  await b("Open event Manual sides").click();
+  await b("Retry payment").click();
+  await page
+    .getByText(
+      "Participant 1 · Share AED 40.00 · Remaining AED 0.00 · Paid in full",
+    )
+    .waitFor();
+  assert.deepEqual(nonces.payment.slice(countBefore), [
+    nonces.payment[countBefore],
+    nonces.payment[countBefore],
+  ]);
+  const settled = (await api(`/v1/events/${manual.id}`)).event;
+  assert.equal(settled.payments.length, 1);
+  assert.equal(settled.payments[0].amountMinor, 4000);
+  await b(`Undo payment ${settled.payments[0].id}`).click();
+  await expect(paid).toBeEnabled();
+
+  await api(`/v1/events/${manual.id}/payments`, {
+    participantId: people[1].id,
+    amountMinor: 6000,
+    clientRequestId: crypto.randomUUID(),
+  });
+  await b("Mark Player 2 paid").click();
+  await page
+    .getByText(/Reload the event to see the current remaining share/)
+    .waitFor();
+  await expect(b("Retry payment")).toHaveCount(0);
+  await b("Reload event").click();
+  await expect(b("Mark Player 2 paid")).toHaveCount(0);
+
+  const legacy = (
+    await api(`/v1/vaults/${vault.id}/events`, {
+      title: "Legacy account event",
+      date: "2020-02-29",
+      totalMinor: 100,
+      currency: "AED",
+      participantIds: ["self", people[0].id],
+      payerId: "self",
+      splitMode: "equal",
+      clientRequestId: crypto.randomUUID(),
+    })
+  ).event;
+  assert.equal(legacy.partialPayments, true);
+  await b("Back to events").click();
+  await b("Open event Legacy account event").click();
+  await b("Record payment for Player 1").click();
+  await field("Payment amount · AED").fill("0.25");
+  await b("Save payment").click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  assert.equal(
+    (await api(`/v1/events/${legacy.id}`)).event.payments[0].amountMinor,
+    25,
+  );
+
   await b("Back to events").click();
   await draftPitchBooking();
   await b("Save event").click();
@@ -456,7 +535,7 @@ const money = (value) =>
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   console.log(
-    "PASS real loopback demo API account wizard:630/14→585, same-ownerrefresh, event/payment lost response reconciled after close, refresh and navigation, identical saves use fresh UUIDs, failed-before-commit and undo retry use same UUID exactly once, overpayblock, fullremaining, reload, archive/reactivate and Back during delayed vault refresh, manualzero/custom/externalselfpayer, privatevsconfirmedbalances, crossownerstaleresponseisolation,320/430. Authmocked; no realemails/productioncalls.",
+    "PASS real loopback demo API account wizard:630/14→585, same-ownerrefresh, event/payment lost response reconciled after close, refresh and navigation, identical saves use fresh UUIDs, failed-before-commit and undo retry use same UUID exactly once, overpayblock, installment and one-tap full remaining, double tap, legacy omitted flag, stale full payment, reload, archive/reactivate and Back during delayed vault refresh, manualzero/custom/externalselfpayer, privatevsconfirmedbalances, crossownerstaleresponseisolation,320/430. Authmocked; no realemails/productioncalls.",
   );
   await browser.close();
 })().catch((error) => {

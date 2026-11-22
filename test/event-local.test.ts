@@ -30,6 +30,7 @@ const input = (change: Partial<EventSubmission> = {}): EventSubmission => ({
   participantIds: ["self", "a", "b"],
   payerId: "self",
   splitMode: "equal",
+  partialPayments: false,
   ...change,
 });
 function ledger(event: ReturnType<typeof createLocalEvent>): Ledger {
@@ -58,6 +59,7 @@ test("new equal/manual event snapshots preserve same-name identity, rounding and
   const manual = createLocalEvent(
     input({
       splitMode: "manual",
+      partialPayments: true,
       allocations: [
         { participantId: "self", shareMinor: 0 },
         { participantId: "a", shareMinor: 18000 },
@@ -197,4 +199,38 @@ test("v1/v2 read-only migration preserves legacy event bytes, balances and archi
   await store.commit((current) => ({ ...current, records: [] }));
   assert.equal(JSON.parse(disk).version, 3);
   assert.equal(JSON.stringify(JSON.parse(disk).vaults), before);
+});
+
+test("full-only events settle the current remaining share and preserve earlier payments and undo history", async () => {
+  const full = createLocalEvent(input({ totalMinor: 101 }), people);
+  assert.equal(full.partialPayments, false);
+  assert.throws(() => eventPayment(full, "a", 15), /full remaining/);
+  assert.throws(() => eventPayment(full, "a", 35), /remaining/);
+  assert.throws(() => eventPayment(full, "self", 34), /payer/);
+
+  // A prior app version can record installments even if this flag was off.
+  const { partialPayments: _flag, ...legacy } = full;
+  const earlier = eventPayment(legacy, "a", 15);
+  assert.equal(eventRemaining(earlier, "a"), 19);
+  const paid = eventPayment({ ...earlier, partialPayments: false }, "a", 19);
+  assert.equal(eventRemaining(paid, "a"), 0);
+  assert.throws(() => eventPayment(paid, "a", 19), /remaining/);
+
+  let disk = JSON.stringify(ledger(paid));
+  const store = createLedgerStore({
+    getItem: async () => disk,
+    setItem: async (_key, value) => {
+      disk = value;
+    },
+  });
+  const loaded = (await store.load()).vaults[0].events[0];
+  assert.equal(loaded.partialPayments, false);
+  assert.deepEqual(loaded.payments.a, paid.payments.a);
+  const corrected = eventUndo(loaded, "a", paid.payments.a[1].id);
+  assert.equal(eventRemaining(corrected, "a"), 19);
+  assert.deepEqual(
+    corrected.payments.a.map((payment) => payment.amountMinor),
+    [15, 19, -19],
+  );
+  assert.doesNotThrow(() => validateLedger(ledger(corrected)));
 });
