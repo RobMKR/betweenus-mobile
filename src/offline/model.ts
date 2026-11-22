@@ -1,3 +1,4 @@
+import { validateMemberIds } from "../vaults/roster";
 import { validateSavedPerson, type SavedPerson } from "../people/model";
 /** Device-only ledger. Every amount is an integer AED minor unit. */
 export type Payment = {
@@ -32,6 +33,7 @@ export type Vault = {
   kind: "temporary" | "permanent";
   archived: boolean;
   events: Event[];
+  memberIds?: string[];
 };
 export type Ledger = {
   version: 1 | 2;
@@ -342,6 +344,11 @@ export function validateLedger(value: unknown): Ledger {
       !Array.isArray(v.events)
     )
       throw new Error("Invalid vault.");
+    if (v.memberIds !== undefined) {
+      if (data.version !== 2)
+        throw new Error("Unsupported legacy roster data.");
+      validateMemberIds(v.memberIds, personIds);
+    }
     for (const e of v.events) {
       unique(e.id);
       text(e.title, "Event title");

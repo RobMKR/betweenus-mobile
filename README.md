@@ -14,7 +14,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the practical workflow, the [issue te
 
 ## Mobile navigation
 
-After choosing a mode (and signing in for an account), **Home**, **People**, **Vaults** and **Settings** stay in a labelled bottom bar. Home shows balances, recent records and creation shortcuts. People opens personal/counterparty records without merging the underlying debts. Vaults keeps each event and its repayments together; account mode explains that shared vaults are not supported. Settings holds mode/storage information and mode-switch/sign-out controls.
+After choosing a mode (and signing in for an account), **Home**, **People**, **Vaults** and **Settings** stay in a labelled bottom bar. Home shows balances, recent records and creation shortcuts. People opens personal/counterparty records without merging the underlying debts. Vaults keeps local events and repayments together and supports private account vault rosters. The account guided event flow is a linked follow-up. Settings holds mode/storage information and mode-switch/sign-out controls.
 
 Tapping People or Vaults opens that tab’s root page, including when it is already selected. Home retains its selected detail during the session. Labelled back controls return to its parent; Android back handles in-app details. Entry forms use keyboard-aware sheets. Offline People groups names after Unicode/case/whitespace normalization; this is a local display grouping, not verified identity or cross-vault reconciliation. Account tabs stay within the signed-in identity; pending and disputed requests remain separate from confirmed balances.
 
@@ -24,7 +24,7 @@ Use Node24 LTS (24.3.0 or newer within the 24.x release line), run `npm ci`, the
 
 - Personal records use names, lend/borrow direction, date, note and AED amounts in integer minor units.
 - Record partial or full repayments, reject overpayments, and undo a payment with a preserved correction history.
-- Temporary vaults keep one or more event expenses. Permanent vaults provide a reusable home for recurring events, with the previous roster carried into the next form.
+- Temporary vaults keep one or more event expenses. Vaults can keep an explicit reusable roster selected from saved People; adding a custom/selected phone contact saves that person separately before selection. Permanent vaults provide a reusable home for recurring events, with the previous roster carried into the next form.
 - Event creation uses the native iOS/Android date picker, defaulted to local today, with a browser date input in the web preview. Dates stay calendar-only strings; vaults remain date-free containers.
 - Each event has its own date, total, participants, a selected self participant and payer. Equal splits assign remainder cents to participants in saved order. The payer covers their own share.
 - Football AED630 shared by14 including you is AED45 each. If you paid, the other13 owe AED585. When someone else paid, only your remaining share is included in your payable balance.
@@ -47,6 +47,12 @@ Offline saved people have stable IDs. New debts can explicitly reference them; d
 On iOS, choose a draft date and use **Use date**, or **Cancel** to keep the prior value. Android uses the native dialog's confirm/dismiss actions. Neither action submits the event. Event strings remain `YYYY-MM-DD`, using local calendar parts and local-noon picker values rather than UTC serialization. Other date fields and stored events are unchanged.
 
 Compatibility checks: `npx expo install --check @react-native-community/datetimepicker` passes. The full dependency check still reports the pre-existing React/React DOM19.3.1 versus Expo-expected19.3.0 warning; that unrelated baseline is not changed by this feature. Browser tests and native JS bundles are not physical iPhone/Android picker verification.
+
+### Vault rosters in both modes
+
+Create a title-only temporary/permanent vault, choose zero to100 saved people, then use **Manage members** to update its roster. Identical names stay separate by ID; selecting a member does not contact them or grant account access. New custom/contact-derived people remain in People even if the vault form is cancelled. The owner is implicit and is selected separately when creating an event. Earlier device vaults have no inferred roster: configuring one preserves every saved event participant, share and repayment.
+
+Account Vaults uses owner-private `/v1/vaults` and idempotent member add/remove routes from the companion API. Device vaults remain separate. A multi-member save can partially succeed server-side; the draft retains the desired selection and retry completes the remaining changes. Vault creation itself is not idempotent: after an interrupted response, close the draft and refresh the list before creating again. Account event creation, balances and repayment history are delivered by linked mobile#18/API#13; this roster slice alone does not implement that flow. No paid/free gating is added.
 
 ## Shared account mode and local API demo
 
@@ -95,3 +101,5 @@ For focused event-date web checks, serve `dist-offline` on localhost:8094 after 
 CI repeats unit tests (auth plus offline model/storage), type checking and a production web bundle. A web bundle does not verify iOS/Android device behavior. Exercise the two-person flow above on both device platforms before a pilot release.
 
 For saved People checks, serve `dist-offline` on localhost:8095 and `dist-auth` on localhost:8096 after their test exports, then run `node scripts/people-smoke.cjs`. The intercepted browser flow covers version-1 preservation/migration, failed-write retry, duplicate names and explicit debt links, account creation/email prefill, directory failure/retry, stale-account response isolation and 320/430px layouts. No real contacts or emails are used. Screenshots: `/tmp/betweenus-saved-people-320.png`, `/tmp/betweenus-saved-people-430.png`, `/tmp/betweenus-saved-people-account.png`.
+
+For vault roster checks, serve `dist-offline` on localhost:8097 and `dist-auth` on localhost:8098 after their test exports, then run `node scripts/roster-smoke.cjs`. It exercises duplicate-name IDs, custom entry inside a vault draft, membership removal/reload, legacy event preservation, failed local writes and partial account-save retry with mocked API responses. Screenshots are saved under `/tmp/betweenus-roster-offline-320.png`, `/tmp/betweenus-roster-offline-430.png` and `/tmp/betweenus-roster-account.png`. Android detail-back is implemented; physical-device keyboard/back and screen-reader behavior remain unverified.

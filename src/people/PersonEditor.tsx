@@ -9,12 +9,14 @@ export default function PersonEditor({
   onSave,
   busy = false,
   error = "",
+  note,
 }: {
   visible: boolean;
   onClose: () => void;
   onSave: (input: PersonInput) => Promise<boolean>;
   busy?: boolean;
   error?: string;
+  note?: string;
 }) {
   const [name, setName] = useState(""),
     [email, setEmail] = useState(""),
@@ -82,6 +84,7 @@ export default function PersonEditor({
         A name is enough. Optional contact details stay in the mode you are
         using. Nothing is sent to this person.
       </Text>
+      {!!note && <Text style={s.small}>{note}</Text>}
       <Button
         title={selecting ? "Opening phone contacts…" : "Choose phone contact"}
         secondary

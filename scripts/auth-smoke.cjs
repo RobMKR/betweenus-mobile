@@ -128,6 +128,7 @@ const session = (email) => ({
       return json({ debt: pending("dispute") });
     }
     if (url.endsWith("/people")) return json({ people: [] });
+    if (url.endsWith("/vaults")) return json({ vaults: [] });
     if (url.endsWith("/me"))
       return json({
         id: alice ? userA : userB,
@@ -236,12 +237,11 @@ const session = (email) => ({
   await expect(button("Open person carol@example.com")).toBeVisible();
   await expect(button("Open person sam@example.com")).toBeVisible();
   await tab("Vaults");
-  await page
-    .getByText("Account vaults are not available yet", { exact: true })
-    .waitFor();
+  await page.getByText("Your vaults", { exact: true }).waitFor();
   await tab("Vaults");
-  await expect(button("Choose device-only mode")).toBeVisible();
-  await button("Choose device-only mode").click();
+  await expect(button("Create vault")).toBeVisible();
+  await tab("Settings");
+  await button("Mode selection").click();
   await button("Use offline — free").click();
   await page
     .getByText("Good times. Clear balances.", { exact: true })
