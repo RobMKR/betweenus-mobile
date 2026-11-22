@@ -97,6 +97,7 @@ const money = (value) =>
   }, session());
   let failEvent = true,
     failPayment = true,
+    failBeforePayment = false,
     failUndo = true,
     holdList = false,
     heldList = null;
@@ -133,6 +134,16 @@ const money = (value) =>
       persona = id === "demo-john" ? "demo-borrower" : "demo-lender",
       body = request.postDataJSON(),
       path = url.pathname;
+    if (request.method() === "POST" && /\/payments$/.test(path)) {
+      nonces.payment.push(body.clientRequestId);
+      if (failBeforePayment) {
+        failBeforePayment = false;
+        return fulfill(
+          { error: { message: "Simulated failure before payment commit" } },
+          503,
+        );
+      }
+    }
     const response = await fetch(apiURL + path, {
       method: request.method(),
       headers: {
@@ -165,7 +176,6 @@ const money = (value) =>
       }
     }
     if (request.method() === "POST" && /\/payments$/.test(path)) {
-      nonces.payment.push(body.clientRequestId);
       if (failPayment && response.ok) {
         failPayment = false;
         return fulfill(
@@ -197,13 +207,16 @@ const money = (value) =>
   await page.goto(pageURL);
   await tab("Vaults");
   await b(`Open ${title}`).click();
-  await b("Add event expense").click();
-  await field("Event title").fill("Pitch booking");
-  await field("Event date").fill("2026-11-20");
-  await field("Total amount (AED)").fill("630");
-  await b("Next").click();
-  await page.getByText("14 participants", { exact: true }).waitFor();
-  await b("Next").click();
+  async function draftPitchBooking() {
+    await b("Add event expense").click();
+    await field("Event title").fill("Pitch booking");
+    await field("Event date").fill("2026-11-20");
+    await field("Total amount (AED)").fill("630");
+    await b("Next").click();
+    await page.getByText("14 participants", { exact: true }).waitFor();
+    await b("Next").click();
+  }
+  await draftPitchBooking();
   await page.evaluate(
     async (data) => {
       const channel = new BroadcastChannel("betweenus-auth-session");
@@ -219,8 +232,13 @@ const money = (value) =>
     .getByRole("dialog")
     .getByText(/Simulated event response loss/)
     .waitFor();
-  await b("Save event").click();
-  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await b("Cancel").click();
+  await b("Refresh expenses").click();
+  await b("Open event Pitch booking").waitFor();
+  await expect(b("Add event expense")).toBeDisabled();
+  await page.getByText("Expense save unconfirmed", { exact: true }).waitFor();
+  await b("Retry event save").click();
+  await b("Back to events").waitFor();
   let events = (await api(`/v1/vaults/${vault.id}/events`)).events;
   assert.equal(events.length, 1);
   assert.equal(events[0].balance.receivableMinor, 58500);
@@ -243,28 +261,56 @@ const money = (value) =>
     .getByRole("dialog")
     .getByText(/Simulated payment response loss/)
     .waitFor();
-  await b("Save payment").click();
-  await page.getByRole("dialog").waitFor({ state: "hidden" });
-  assert.equal(nonces.payment[0], nonces.payment[1]);
+  await b("Close details").click();
+  await b("Reload event").click();
+  await page.getByText(/Receivable AED 565.00 · Payable AED 0.00/).waitFor();
+  await page.getByText("Payment save unconfirmed", { exact: true }).waitFor();
+  await expect(b("Record payment for Player 1")).toBeDisabled();
+  await tab("Home");
+  await tab("Vaults");
+  await b(`Open ${title}`).click();
+  await b("Open event Pitch booking").click();
+  await b("Retry payment").click();
+  await expect(b("Record payment for Player 1")).toBeEnabled();
   events = (await api(`/v1/vaults/${vault.id}/events`)).events;
-  assert.equal(events[0].payments.length, 1);
   assert.equal(events[0].balance.receivableMinor, 56500);
+  assert.equal(events[0].payments.length, 1);
+  assert.equal(nonces.payment[0], nonces.payment[1]);
+  assert.match(nonces.payment[0], /^[0-9a-f-]{36}$/);
+
+  failBeforePayment = true;
   await b("Record payment for Player 1").click();
-  await b("Use full remaining").click();
-  await expect(field("Payment amount · AED")).toHaveValue("25.00");
+  await field("Payment amount · AED").fill("20");
   await b("Save payment").click();
+  await page
+    .getByRole("dialog")
+    .getByText(/Simulated failure before payment commit/)
+    .waitFor();
+  assert.equal((await api(`/v1/events/${eventId}`)).event.payments.length, 1);
+  await b("Retry payment").click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   assert.notEqual(nonces.payment[1], nonces.payment[2]);
+  assert.equal(nonces.payment[2], nonces.payment[3]);
+  events = (await api(`/v1/vaults/${vault.id}/events`)).events;
+  assert.equal(events[0].payments.length, 2);
+  assert.equal(events[0].balance.receivableMinor, 54500);
+
+  await b("Record payment for Player 1").click();
+  await b("Use full remaining").click();
+  await expect(field("Payment amount · AED")).toHaveValue("5.00");
+  await b("Save payment").click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  assert.notEqual(nonces.payment[3], nonces.payment[4]);
   let current = (await api(`/v1/events/${eventId}`)).event;
   assert.equal(current.balance.receivableMinor, 54000);
-  const paymentId = current.payments[1].id;
+  const paymentId = current.payments[2].id;
   await b(`Undo payment ${paymentId}`).click();
   await page.getByText(/Simulated undo response loss/).waitFor();
   await b(`Undo payment ${paymentId}`).click();
   await expect(b(`Undo payment ${paymentId}`)).toHaveCount(0);
   current = (await api(`/v1/events/${eventId}`)).event;
-  assert.equal(current.payments.length, 3);
-  assert.equal(current.balance.receivableMinor, 56500);
+  assert.equal(current.payments.length, 4);
+  assert.equal(current.balance.receivableMinor, 54500);
   assert.equal(nonces.undo[0], nonces.undo[1]);
   await b("Back to events").scrollIntoViewIfNeeded();
   for (const width of [320, 430]) {
@@ -283,7 +329,7 @@ const money = (value) =>
   await tab("Vaults");
   await b(`Open ${title}`).click();
   await b("Open event Pitch booking").click();
-  await page.getByText(/Receivable AED 565.00 · Payable AED 0.00/).waitFor();
+  await page.getByText(/Receivable AED 545.00 · Payable AED 0.00/).waitFor();
   await b("Back to events").click();
   await b("Archive vault").click();
   await b("Reactivate vault").waitFor();
@@ -297,7 +343,7 @@ const money = (value) =>
     .filter({ hasText: money(privateBalance.receivableMinor) })
     .waitFor();
   assert.ok(confirmed.receivableMinor >= 5000);
-  assert.ok(privateBalance.receivableMinor >= 56500);
+  assert.ok(privateBalance.receivableMinor >= 54500);
   await tab("Vaults");
   await b(`Open ${title}`).click();
   await b("Reactivate vault").click();
@@ -345,8 +391,18 @@ const money = (value) =>
   );
   assert.equal(
     savedEvents.find((item) => item.id === eventId).payments.length,
-    3,
+    4,
   );
+  await b("Back to events").click();
+  await draftPitchBooking();
+  await b("Save event").click();
+  await b("Back to events").waitFor();
+  const identical = (await api(`/v1/vaults/${vault.id}/events`)).events.filter(
+    (item) => item.title === "Pitch booking",
+  );
+  assert.equal(identical.length, 2);
+  assert.equal(identical.find((item) => item.id !== eventId).totalMinor, 63000);
+  assert.notEqual(nonces.event[0], nonces.event.at(-1));
   holdList = true;
   await tab("Home");
   await tab("Vaults");
@@ -369,7 +425,7 @@ const money = (value) =>
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   console.log(
-    "PASS real loopback demo API account wizard:630/14→585, same-ownerrefresh, event/payment/undo lost-response retries sameUUID exactlyonce, overpayblock, fullremaining, reload, archive/reactivate, manualzero/custom/externalselfpayer, privatevsconfirmedbalances, crossownerstaleresponseisolation,320/430. Authmocked; no realemails/productioncalls.",
+    "PASS real loopback demo API account wizard:630/14→585, same-ownerrefresh, event/payment lost response reconciled after close, refresh and navigation, identical saves use fresh UUIDs, failed-before-commit and undo retry use same UUID exactly once, overpayblock, fullremaining, reload, archive/reactivate, manualzero/custom/externalselfpayer, privatevsconfirmedbalances, crossownerstaleresponseisolation,320/430. Authmocked; no realemails/productioncalls.",
   );
   await browser.close();
 })().catch((error) => {

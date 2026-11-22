@@ -1,3 +1,5 @@
+import type { EventSubmission } from "./draft";
+
 export type EventParticipant = {
   participantId: string;
   name: string;
@@ -60,7 +62,18 @@ export function moneyIntentKey(resource: string, body: object): string {
   return `${resource}:${canonical(normalized)}`;
 }
 
-/** Failure retains an intent UUID; success retires it so a later equal payment is new. */
+export type AccountMoneyIntent = { clientRequestId: string } & (
+  | { kind: "event"; body: EventSubmission }
+  | {
+      kind: "payment";
+      eventId: string;
+      eventTitle: string;
+      participantName: string;
+      body: { participantId: string; amountMinor: number };
+    }
+);
+
+/** A retry of the same correction uses the same reference until confirmed. */
 export class PendingMoneyIntents {
   private pending = new Map<string, string>();
   constructor(private makeId: () => string) {}

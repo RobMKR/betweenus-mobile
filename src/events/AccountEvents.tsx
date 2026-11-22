@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { randomUUID } from "expo-crypto";
-import { amountToMinor, money, request } from "../api";
+import { amountToMinor, ApiRequestError, money, request } from "../api";
 import { Button, Field, Sheet, s } from "../offline/ui";
 import {
   personRequest,
@@ -15,6 +15,7 @@ import {
   moneyIntentKey,
   PendingMoneyIntents,
   type AccountEvent,
+  type AccountMoneyIntent,
   type EventParticipant,
 } from "./accountTypes";
 
@@ -29,6 +30,17 @@ export type AccountEventsProps = {
   onChanged: () => void;
 };
 
+// Keep exact unconfirmed writes across navigation in the current app runtime.
+const unresolvedMoneyIntents = new Map<string, AccountMoneyIntent>();
+
+const ledgerRejections: Readonly<Record<string, number>> = {
+  VALIDATION_ERROR: 400,
+  NOT_FOUND: 404,
+  VAULT_ARCHIVED: 409,
+  PAYER_PAYMENT: 409,
+  OVERPAYMENT: 409,
+};
+
 export default function AccountEvents(props: AccountEventsProps) {
   const { vault, people, selectedEventId } = props;
   const latest = useRef(props);
@@ -38,7 +50,9 @@ export default function AccountEvents(props: AccountEventsProps) {
   const listSequence = useRef(0),
     detailSequence = useRef(0);
   const lock = useRef(false);
-  const intents = useRef(new PendingMoneyIntents(randomUUID));
+  const undoIntents = useRef(new PendingMoneyIntents(randomUUID));
+  const scope = JSON.stringify([props.ownerId, vault.id]);
+  const pending = unresolvedMoneyIntents.get(scope);
   const [events, setEvents] = useState<AccountEvent[]>([]);
   const [event, setEvent] = useState<AccountEvent | null>(null);
   const [loading, setLoading] = useState(true),
@@ -120,7 +134,7 @@ export default function AccountEvents(props: AccountEventsProps) {
     active.current = true;
     generation.current++;
     lock.current = false;
-    intents.current.clear();
+    undoIntents.current.clear();
     setEvents([]);
     setEvent(null);
     setBusy(false);
@@ -159,39 +173,69 @@ export default function AccountEvents(props: AccountEventsProps) {
     if (latest.current.selectedEventId === saved.id) setEvent(saved);
     latest.current.onChanged();
   }
-  async function saveEvent(body: EventSubmission) {
-    if (lock.current) return false;
-    if (latest.current.vault.archived) {
-      setWizardError(
-        "This vault is archived. Close the draft and reactivate the vault before saving a new expense.",
-      );
-      return false;
-    }
-    lock.current = true;
-    setBusy(true);
-    setWizardError("");
+  async function submitMoney(intent: AccountMoneyIntent) {
     const captured = context();
-    const path = `/vaults/${encodeURIComponent(captured.vault)}/events`;
-    const key = moneyIntentKey(path, body);
+    const existing = unresolvedMoneyIntents.get(scope);
+    if (
+      lock.current ||
+      !current(captured) ||
+      captured.owner !== props.ownerId ||
+      captured.vault !== vault.id ||
+      (existing && existing !== intent)
+    )
+      return false;
+    lock.current = true;
+    unresolvedMoneyIntents.set(scope, intent);
+    setBusy(true);
+    setError("");
+    setPaymentError("");
+    setWizardError("");
+    const path =
+      intent.kind === "event"
+        ? `/vaults/${encodeURIComponent(captured.vault)}/events`
+        : `/events/${encodeURIComponent(intent.eventId)}/payments`;
+    function settle() {
+      if (unresolvedMoneyIntents.get(scope) === intent)
+        unresolvedMoneyIntents.delete(scope);
+    }
     try {
-      const clientRequestId = intents.current.idFor(key);
       const { event: saved } = await request<{ event: AccountEvent }>(
         path,
         latest.current.token,
-        { ...body, clientRequestId },
+        { ...intent.body, clientRequestId: intent.clientRequestId },
       );
+      if (
+        !saved?.id ||
+        saved.vaultId !== captured.vault ||
+        (intent.kind === "payment" && saved.id !== intent.eventId)
+      )
+        throw new Error("The server did not confirm the ledger entry.");
       if (!current(captured)) return false;
-      intents.current.succeeded(key);
+      settle();
       publish(saved);
-      setEvent(saved);
-      setWizard(false);
-      latest.current.onSelectEvent(saved.id);
+      if (intent.kind === "event") {
+        setWizard(false);
+        latest.current.onSelectEvent(saved.id);
+      } else {
+        setPaying(null);
+      }
       return true;
     } catch (e) {
-      if (current(captured))
-        setWizardError(
-          `${(e as Error).message} Your draft is kept. Retrying unchanged uses the same save reference.`,
-        );
+      if (!current(captured)) return false;
+      // These are explicit ledger rejections. An idempotent replay of an
+      // existing entry returns the event before checking these write rules.
+      const rejected =
+        e instanceof ApiRequestError &&
+        ledgerRejections[e.code ?? ""] === e.status;
+      if (rejected) settle();
+      const message =
+        (e as Error).message +
+        (rejected
+          ? ""
+          : " The result is uncertain. Retry this request to confirm it or finish saving it.");
+      setError(message);
+      if (intent.kind === "event") setWizardError(message);
+      else setPaymentError(message);
       return false;
     } finally {
       if (current(captured)) {
@@ -199,6 +243,27 @@ export default function AccountEvents(props: AccountEventsProps) {
         setBusy(false);
       }
     }
+  }
+  async function saveEvent(body: EventSubmission) {
+    const prior = unresolvedMoneyIntents.get(scope);
+    if (prior) {
+      if (
+        prior.kind === "event" &&
+        moneyIntentKey("", prior.body) === moneyIntentKey("", body)
+      )
+        return submitMoney(prior);
+      setWizardError(
+        "Close this draft and resolve the pending request before saving a changed expense.",
+      );
+      return false;
+    }
+    if (latest.current.vault.archived) {
+      setWizardError(
+        "This vault is archived. Close the draft and reactivate the vault before saving a new expense.",
+      );
+      return false;
+    }
+    return submitMoney({ kind: "event", body, clientRequestId: randomUUID() });
   }
   async function createPerson(input: PersonInput): Promise<SavedPerson | null> {
     if (lock.current) return null;
@@ -233,8 +298,18 @@ export default function AccountEvents(props: AccountEventsProps) {
     }
   }
   async function savePayment() {
-    if (!event || !paying || lock.current || latest.current.vault.archived)
+    if (!event || !paying || lock.current) return;
+    const prior = unresolvedMoneyIntents.get(scope);
+    if (prior) {
+      if (
+        prior.kind === "payment" &&
+        prior.eventId === event.id &&
+        prior.body.participantId === paying.participantId
+      )
+        await submitMoney(prior);
       return;
+    }
+    if (latest.current.vault.archived) return;
     const amountMinor = amountToMinor(amount);
     const live = event.participants.find(
       (p) => p.participantId === paying.participantId,
@@ -250,35 +325,14 @@ export default function AccountEvents(props: AccountEventsProps) {
       );
       return;
     }
-    lock.current = true;
-    setBusy(true);
-    setPaymentError("");
-    const captured = context();
-    const path = `/events/${encodeURIComponent(event.id)}/payments`;
-    const body = { participantId: live.participantId, amountMinor };
-    const key = moneyIntentKey(path, body);
-    try {
-      const clientRequestId = intents.current.idFor(key);
-      const { event: saved } = await request<{ event: AccountEvent }>(
-        path,
-        latest.current.token,
-        { ...body, clientRequestId },
-      );
-      if (!current(captured)) return;
-      intents.current.succeeded(key);
-      publish(saved);
-      setPaying(null);
-    } catch (e) {
-      if (current(captured))
-        setPaymentError(
-          `${(e as Error).message} The result may be uncertain. Retry unchanged safely using the same payment reference.`,
-        );
-    } finally {
-      if (current(captured)) {
-        lock.current = false;
-        setBusy(false);
-      }
-    }
+    await submitMoney({
+      kind: "payment",
+      eventId: event.id,
+      eventTitle: event.title,
+      participantName: live.isSelf ? "you" : live.name,
+      body: { participantId: live.participantId, amountMinor },
+      clientRequestId: randomUUID(),
+    });
   }
   async function undoPayment(paymentId: string) {
     if (!event || lock.current || latest.current.vault.archived) return;
@@ -289,14 +343,14 @@ export default function AccountEvents(props: AccountEventsProps) {
     const path = `/events/${encodeURIComponent(event.id)}/payments/${encodeURIComponent(paymentId)}/undo`;
     const key = moneyIntentKey(path, {});
     try {
-      const clientRequestId = intents.current.idFor(key);
+      const clientRequestId = undoIntents.current.idFor(key);
       const { event: saved } = await request<{ event: AccountEvent }>(
         path,
         latest.current.token,
         { clientRequestId },
       );
       if (!current(captured)) return;
-      intents.current.succeeded(key);
+      undoIntents.current.succeeded(key);
       publish(saved);
     } catch (e) {
       if (current(captured))
@@ -338,6 +392,31 @@ export default function AccountEvents(props: AccountEventsProps) {
   const visibleEvent = event?.id === selectedEventId ? event : null;
   return (
     <View style={{ gap: 16 }}>
+      {pending && !wizard && !paying && (
+        <View style={s.card}>
+          <Text accessibilityRole="alert" style={s.cardTitle}>
+            {pending.kind === "event"
+              ? "Expense save unconfirmed"
+              : "Payment save unconfirmed"}
+          </Text>
+          <Text style={s.body}>
+            {pending.kind === "event"
+              ? `${pending.body.title} · ${money(pending.body.totalMinor)}`
+              : `${pending.eventTitle} · ${pending.participantName} · ${money(pending.body.amountMinor)}`}
+          </Text>
+          <Text style={s.small}>
+            Retry the original request to confirm it or finish saving it. Then
+            you can record a new expense or payment.
+          </Text>
+          <Button
+            title={
+              pending.kind === "event" ? "Retry event save" : "Retry payment"
+            }
+            disabled={busy}
+            onPress={() => void submitMoney(pending)}
+          />
+        </View>
+      )}
       {selectedEventId ? (
         <>
           <Button
@@ -403,7 +482,7 @@ export default function AccountEvents(props: AccountEventsProps) {
                       <Button
                         title={`Record payment for ${participant.isSelf ? "you" : participant.name}`}
                         secondary
-                        disabled={busy || vault.archived}
+                        disabled={busy || vault.archived || !!pending}
                         onPress={() => {
                           setPaying(participant);
                           setAmount("");
@@ -472,7 +551,7 @@ export default function AccountEvents(props: AccountEventsProps) {
           </Text>
           <Button
             title="Add event expense"
-            disabled={busy || vault.archived}
+            disabled={busy || vault.archived || !!pending}
             onPress={() => {
               setWizardError("");
               setWizard(true);
@@ -544,6 +623,7 @@ export default function AccountEvents(props: AccountEventsProps) {
         onCreatePerson={createPerson}
         busy={busy}
         error={wizardError}
+        retrying={pending?.kind === "event"}
       />
       <Sheet
         visible={!!paying}
@@ -565,12 +645,12 @@ export default function AccountEvents(props: AccountEventsProps) {
           value={amount}
           onChangeText={setAmount}
           keyboardType="decimal-pad"
-          editable={!busy}
+          editable={!busy && !pending}
         />
         <Button
           title="Use full remaining"
           secondary
-          disabled={busy}
+          disabled={busy || !!pending}
           onPress={() =>
             setAmount(((paying?.remainingMinor ?? 0) / 100).toFixed(2))
           }
@@ -581,8 +661,14 @@ export default function AccountEvents(props: AccountEventsProps) {
           </Text>
         )}
         <Button
-          title={busy ? "Saving payment…" : "Save payment"}
-          disabled={busy || vault.archived}
+          title={
+            busy
+              ? "Saving payment…"
+              : pending
+                ? "Retry payment"
+                : "Save payment"
+          }
+          disabled={busy || (vault.archived && !pending)}
           onPress={() => void savePayment()}
         />
       </Sheet>

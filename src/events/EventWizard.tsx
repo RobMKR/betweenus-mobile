@@ -24,6 +24,7 @@ export type EventWizardProps = {
   onCreatePerson: (input: PersonInput) => Promise<SavedPerson | null>;
   busy?: boolean;
   error?: string;
+  retrying?: boolean;
 };
 
 const steps = ["Details", "People", "Split and review"] as const;
@@ -93,6 +94,7 @@ function WizardSession({
   onCreatePerson,
   busy = false,
   error = "",
+  retrying = false,
 }: EventWizardProps) {
   const [draft, setDraft] = useState<EventDraft>(() => ({
     ...newEventDraft(),
@@ -522,7 +524,13 @@ function WizardSession({
             />
           ) : (
             <Button
-              title={locked ? "Saving event…" : "Save event"}
+              title={
+                locked
+                  ? "Saving event…"
+                  : retrying
+                    ? "Retry event save"
+                    : "Save event"
+              }
               disabled={locked || !submission}
               onPress={() => void save()}
             />
