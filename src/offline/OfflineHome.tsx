@@ -14,7 +14,6 @@ import { localPeople, backPath, DetailPath } from "../navigation/people";
 import { amountToMinor, money } from "../api";
 import {
   addPayment,
-  createEvent,
   emptyLedger,
   eventBalances,
   eventPayment,
@@ -26,7 +25,7 @@ import {
   LocalRecord,
   Payment,
   remaining,
-  split,
+  eventShares,
   text,
   undoPayment,
   updateEvent,
@@ -45,9 +44,11 @@ import {
   type SavedPerson,
   type PersonInput,
 } from "../people/model";
-import EventDateField from "./EventDateField";
+import EventWizard from "../events/EventWizard";
+import { createLocalEvent } from "../events/local";
+import type { EventSubmission } from "../events/draft";
 import { localCalendarDate } from "./eventDate";
-type Form = "record" | "vault" | "roster" | "event" | "payment" | null;
+type Form = "record" | "vault" | "roster" | "payment" | null;
 const today = localCalendarDate;
 export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const listRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
@@ -86,7 +87,13 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(today);
-  const [dateEditing, setDateEditing] = useState(false);
+  const [wizardTarget, setWizardTarget] = useState<{
+    vaultId: string;
+    tab: Tab;
+  } | null>(null);
+  const wizardVault = ledger.vaults.find(
+    (item) => item.id === wizardTarget?.vaultId,
+  );
   const [personEditor, setPersonEditor] = useState(false);
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [personForRoster, setPersonForRoster] = useState(false);
@@ -94,9 +101,6 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const [note, setNote] = useState("");
   const [direction, setDirection] = useState<"lent" | "borrowed">("lent");
   const [kind, setKind] = useState<"temporary" | "permanent">("temporary");
-  const [names, setNames] = useState("You\n");
-  const [selfIndex, setSelfIndex] = useState(0);
-  const [payerIndex, setPayerIndex] = useState(0);
   const record = ledger.records.find((r) => r.id === recordId);
   const vault = ledger.vaults.find((v) => v.id === vaultId);
   const event = vault?.events.find((e) => e.id === eventId);
@@ -110,10 +114,6 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   );
   const selectedPerson = people.find((p) => p.key === path.personKey);
   const linked = savedPersonRecords(ledger.records, selectedSavedPerson?.id);
-  const lines = names
-    .split("\n")
-    .map((n) => n.trim())
-    .filter(Boolean);
   async function load() {
     setBusy(true);
     setError("");
@@ -166,23 +166,10 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     setRecordPersonId(forPerson?.id || null);
     setAmount("");
     setDate(today());
-    setDateEditing(false);
     setNote("");
     setDirection("lent");
     setKind("temporary");
     setMemberIds(next === "roster" ? [...(vault?.memberIds || [])] : []);
-    if (next === "event" && vault?.events.length) {
-      const previous = vault.events[vault.events.length - 1];
-      setNames(previous.participants.map((p) => p.name).join("\n"));
-      setSelfIndex(previous.participants.findIndex((p) => p.isSelf));
-      setPayerIndex(
-        previous.participants.findIndex((p) => p.id === previous.payerId),
-      );
-    } else {
-      setNames("You\n");
-      setSelfIndex(0);
-      setPayerIndex(0);
-    }
     setForm(next);
   }
   function close() {
@@ -193,7 +180,6 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
       return;
     }
     if (form) {
-      setDateEditing(false);
       setForm(null);
       return;
     }
@@ -232,7 +218,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     await save(
       (current) => ({
         ...current,
-        version: 2,
+        version: 3,
         people: [...(current.people || []), person],
       }),
       () => {
@@ -243,6 +229,61 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             previous.length < 100 ? [...previous, person.id] : previous,
           );
         else updatePath(() => ({ savedPersonId: person.id }));
+      },
+    );
+    return success;
+  }
+  async function createWizardPerson(
+    input: PersonInput,
+  ): Promise<SavedPerson | null> {
+    const person: SavedPerson = {
+      id: id(),
+      createdAt: new Date().toISOString(),
+      ...personFields(input),
+    };
+    let result: SavedPerson | null = null;
+    await save(
+      (current) => ({
+        ...current,
+        version: 3,
+        people: [...(current.people || []), person],
+      }),
+      () => {
+        result = person;
+      },
+    );
+    return result;
+  }
+  async function saveWizardEvent(input: EventSubmission) {
+    if (!wizardTarget) return false;
+    const target = wizardTarget;
+    const next = createLocalEvent(input, savedPeople);
+    let success = false;
+    await save(
+      (current) => {
+        const container = current.vaults.find(
+          (item) => item.id === target.vaultId,
+        );
+        if (!container || container.archived)
+          throw new Error("Reactivate this vault before adding an event.");
+        return {
+          ...current,
+          version: 3,
+          vaults: current.vaults.map((item) =>
+            item.id === container.id
+              ? { ...item, events: [...item.events, next] }
+              : item,
+          ),
+        };
+      },
+      () => {
+        success = true;
+        setWizardTarget(null);
+        setPaths((current) => ({
+          ...current,
+          [target.tab]: { vaultId: target.vaultId, eventId: next.id },
+        }));
+        setTab(target.tab);
       },
     );
     return success;
@@ -303,29 +344,6 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
         await save(
           (current) => setVaultRoster(current, vault.id, memberIds),
           () => setForm(null),
-        );
-      } else if (form === "event" && vault) {
-        const next = createEvent({
-          title: name,
-          date,
-          totalMinor: minor(),
-          names: lines,
-          selfIndex,
-          payerIndex,
-        });
-        await save(
-          (current) => ({
-            ...current,
-            vaults: current.vaults.map((v) => {
-              if (v.id !== vault.id) return v;
-              if (v.archived) throw new Error("Reactivate this vault first.");
-              return { ...v, events: [...v.events, next] };
-            }),
-          }),
-          () => {
-            setForm(null);
-            setEventId(next.id);
-          },
         );
       } else if (form === "payment") {
         const value = minor();
@@ -418,7 +436,6 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
         record: "Add a personal record",
         vault: "Create a vault",
         roster: "Manage vault members",
-        event: "Add an event expense",
         payment: "Record a payment",
       }[form]
     : event
@@ -578,7 +595,10 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
               <Button
                 title="Add event expense"
                 disabled={busy}
-                onPress={() => openForm("event")}
+                onPress={() => {
+                  setError("");
+                  setWizardTarget({ vaultId: vault.id, tab });
+                }}
               />
             )}
             <Text style={s.section}>
@@ -595,7 +615,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 participants remain unchanged.
               </Text>
             )}
-            {(vault.memberIds || []).map((memberId) => {
+            {(vault.memberIds || []).slice(0, 3).map((memberId) => {
               const member = savedPeople.find(
                 (person) => person.id === memberId,
               )!;
@@ -608,6 +628,12 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 </View>
               );
             })}
+            {(vault.memberIds?.length || 0) > 3 && (
+              <Text style={s.small}>
+                {vault.memberIds!.length - 3} more members · Manage members to
+                view everyone.
+              </Text>
+            )}
             {!vault.archived && (
               <Button
                 title="Manage members"
@@ -672,7 +698,9 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             <Text style={s.section}>{event.title}</Text>
             <Text style={s.body}>
               {event.date} · Paid by{" "}
-              {event.participants.find((p) => p.id === event.payerId)?.name}
+              {event.payerId === "self" && event.splitMode
+                ? "You"
+                : event.participants.find((p) => p.id === event.payerId)?.name}
             </Text>
             <Text style={s.amount}>{money(event.totalMinor)}</Text>
             <View style={[s.card, { backgroundColor: c.pale }]}>
@@ -683,13 +711,15 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 You owe · {money(eventBalances(event).payableMinor)}
               </Text>
               <Text style={s.small}>
-                {event.participants.length} equal shares. Your own share{" "}
+                {event.participants.length}{" "}
+                {event.splitMode === "manual" ? "manual" : "equal"} shares. Your
+                own share{" "}
                 {money(
-                  split(event.totalMinor, event.participants)[
-                    event.participants.find((p) => p.isSelf)!.id
-                  ],
+                  eventShares(event)[
+                    event.participants.find((p) => p.isSelf)?.id || ""
+                  ] || 0,
                 )}{" "}
-                is included in the total, never added to what others owe you.
+                is never added to what others owe you.
               </Text>
             </View>
             <Text style={s.section}>Participants & payments</Text>
@@ -698,6 +728,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 <View style={s.rowBetween}>
                   <Text style={s.cardTitle}>
                     {p.name}
+                    {!p.isSelf &&
+                    p.name.normalize("NFKC").trim().toLocaleLowerCase() ===
+                      "you"
+                      ? " · saved person"
+                      : ""}
                     {p.isSelf && p.name.toLowerCase() !== "you" ? " (you)" : ""}
                   </Text>
                   <Text style={s.label}>
@@ -707,8 +742,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                   </Text>
                 </View>
                 <Text style={s.small}>
-                  Share{" "}
-                  {money(split(event.totalMinor, event.participants)[p.id])}
+                  Share {money(eventShares(event)[p.id])}
                   {p.id !== event.payerId
                     ? ` · ${eventRemaining(event, p.id) === 0 ? "Paid in full" : "remaining to payer"}`
                     : " · Paid the original expense"}
@@ -955,6 +989,24 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
 
         {busy && ready && <ActivityIndicator color={c.green} />}
       </ScrollView>
+      {wizardVault && (
+        <EventWizard
+          visible={!!wizardTarget}
+          vaultTitle={wizardVault.title}
+          rosterIds={wizardVault.memberIds || []}
+          people={savedPeople}
+          onClose={() => {
+            if (!busy) {
+              setWizardTarget(null);
+              setError("");
+            }
+          }}
+          onSave={saveWizardEvent}
+          onCreatePerson={createWizardPerson}
+          busy={busy}
+          error={error}
+        />
+      )}
       <PersonEditor
         visible={personEditor}
         onClose={() => setPersonEditor(false)}
@@ -1064,78 +1116,6 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             />
           </>
         )}
-        {form === "event" && (
-          <>
-            <Text style={s.body}>
-              Each participant gets an equal share. Any spare cents go in the
-              saved participant order. The payer covers their own share.
-            </Text>
-            <Field
-              label="Event title"
-              value={name}
-              onChangeText={setName}
-              placeholder="Football pitch"
-              maxLength={200}
-            />
-            <EventDateField
-              value={date}
-              onChange={setDate}
-              onEditingChange={setDateEditing}
-              disabled={busy}
-            />
-            <Field
-              label="Event total · AED"
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="decimal-pad"
-            />
-            <Field
-              label="Participants · one name per line"
-              value={names}
-              onChangeText={(next) => {
-                const selfName = lines[selfIndex];
-                const payerName = lines[payerIndex];
-                const nextLines = next
-                  .split("\n")
-                  .map((n) => n.trim())
-                  .filter(Boolean);
-                setNames(next);
-                setSelfIndex(selfName ? nextLines.indexOf(selfName) : -1);
-                setPayerIndex(payerName ? nextLines.indexOf(payerName) : -1);
-              }}
-              multiline
-              placeholder={"You\nAlex\nSam"}
-              maxLength={8100}
-            />
-            <Text style={s.label}>Which participant is you?</Text>
-            <View style={s.row}>
-              {lines.map((n, i) => (
-                <Choice
-                  key={i}
-                  title={`${n} (me)`}
-                  active={selfIndex === i}
-                  onPress={() => setSelfIndex(i)}
-                />
-              ))}
-            </View>
-            <Text style={s.label}>Who paid the total?</Text>
-            <View style={s.row}>
-              {lines.map((n, i) => (
-                <Choice
-                  key={i}
-                  title={`${n} paid`}
-                  active={payerIndex === i}
-                  onPress={() => setPayerIndex(i)}
-                />
-              ))}
-            </View>
-            <Text style={s.small}>
-              {lines.length} participant{lines.length === 1 ? "" : "s"},
-              including you. Names must be unique. You must be included exactly
-              once.
-            </Text>
-          </>
-        )}
         {form === "payment" && (
           <>
             <Text style={s.cardTitle}>
@@ -1143,7 +1123,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 ? record.direction === "lent"
                   ? `Payment from ${record.name}`
                   : `Your payment to ${record.name}`
-                : `${person?.name}${person?.isSelf ? " (you)" : ""} paid ${event?.participants.find((p) => p.id === event.payerId)?.name}`}
+                : `${person?.name}${person?.isSelf ? " (you)" : ""} paid ${event?.payerId === "self" && event.splitMode ? "You" : event?.participants.find((p) => p.id === event.payerId)?.name}`}
             </Text>
             <Text style={s.body}>
               Remaining {money(paymentDue)}. This records money paid outside the
@@ -1168,19 +1148,15 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             title={
               busy
                 ? "Saving…"
-                : form === "event" && dateEditing
-                  ? "Finish choosing date"
-                  : form === "payment"
-                    ? "Save payment"
-                    : form === "event"
-                      ? "Save event expense"
-                      : form === "roster"
-                        ? "Save members"
-                        : form === "vault"
-                          ? "Save vault"
-                          : "Save personal record"
+                : form === "payment"
+                  ? "Save payment"
+                  : form === "roster"
+                    ? "Save members"
+                    : form === "vault"
+                      ? "Save vault"
+                      : "Save personal record"
             }
-            disabled={busy || (form === "event" && dateEditing)}
+            disabled={busy}
             onPress={() => void submit()}
           />
         )}

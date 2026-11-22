@@ -91,7 +91,7 @@ test("new dates persist as strings while existing event dates/repayments/archive
     },
   });
   const loaded = await store.load();
-  assert.equal(loaded.version, 2);
+  assert.equal(loaded.version, 3);
   assert.deepEqual(loaded.records, initial.records);
   assert.deepEqual(loaded.vaults, initial.vaults);
   assert.deepEqual(loaded.people, []);

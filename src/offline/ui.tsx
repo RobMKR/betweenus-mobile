@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Modal,
   KeyboardAvoidingView,
@@ -89,20 +89,34 @@ export function Sheet({
   title,
   onClose,
   children,
+  scrollKey,
+  onRequestClose,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  scrollKey?: string | number;
+  onRequestClose?: () => void;
 }) {
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  useEffect(() => {
+    if (scrollKey !== undefined)
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [scrollKey]);
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={onRequestClose || onClose}
+    >
       <SafeAreaView style={s.safe}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <ScrollView
+            ref={scrollRef}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={s.sheet}
           >

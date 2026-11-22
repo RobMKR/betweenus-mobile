@@ -90,6 +90,37 @@ function DebtHome({
   const [me, setMe] = useState<{ id: string; email: string } | null>(null);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
+  const [vaultBalances, setVaultBalances] = useState<Balance[] | null>(null);
+  const [vaultBalanceError, setVaultBalanceError] = useState("");
+  const vaultBalanceSequence = useRef(0);
+  async function loadVaultBalances() {
+    const operationOwner = owner,
+      sequence = ++vaultBalanceSequence.current;
+    setVaultBalanceError("");
+    try {
+      const result = await request<{ balances: Balance[] }>(
+        "/vault-balances",
+        token,
+      );
+      if (
+        active.current &&
+        peopleOwner.current === operationOwner &&
+        sequence === vaultBalanceSequence.current
+      )
+        setVaultBalances(result.balances);
+    } catch (cause) {
+      if (
+        active.current &&
+        peopleOwner.current === operationOwner &&
+        sequence === vaultBalanceSequence.current
+      )
+        setVaultBalanceError((cause as Error).message);
+    }
+  }
+  useEffect(() => {
+    setVaultBalances(null);
+    void loadVaultBalances();
+  }, [owner]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -537,7 +568,13 @@ function DebtHome({
             contentContainerStyle={s.page}
             refreshControl={
               tab === "home" || tab === "people" ? (
-                <RefreshControl refreshing={busy} onRefresh={refresh} />
+                <RefreshControl
+                  refreshing={busy}
+                  onRefresh={() => {
+                    void refresh();
+                    void loadVaultBalances();
+                  }}
+                />
               ) : undefined
             }
           >
@@ -598,6 +635,48 @@ function DebtHome({
                       </Text>
                     </View>
                   ))}
+                <View style={s.card}>
+                  <Text style={s.sectionTitle}>Private vault balances</Text>
+                  <Text style={s.small}>
+                    Separate from confirmed shared debts. Includes archived
+                    unpaid events.
+                  </Text>
+                  {vaultBalances === null ? (
+                    <Text style={s.body}>
+                      Private balances unavailable until loaded.
+                    </Text>
+                  ) : (
+                    vaultBalances.map((balance) => (
+                      <View key={balance.currency}>
+                        <Text
+                          accessibilityLabel="Private vault receivable"
+                          style={s.body}
+                        >
+                          Owed to you ·{" "}
+                          {money(balance.receivableMinor, balance.currency)}
+                        </Text>
+                        <Text
+                          accessibilityLabel="Private vault payable"
+                          style={s.body}
+                        >
+                          You owe ·{" "}
+                          {money(balance.payableMinor, balance.currency)}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                  {!!vaultBalanceError && (
+                    <Text accessibilityRole="alert" style={s.error}>
+                      {vaultBalanceError}
+                    </Text>
+                  )}
+                  {button(
+                    "Refresh private balances",
+                    () => void loadVaultBalances(),
+                    true,
+                    false,
+                  )}
+                </View>
                 <View style={s.shortcuts}>
                   {button("Add debt", () => startCreate(), false, busy || !me)}
                   {button(
@@ -814,6 +893,10 @@ function DebtHome({
                 }
                 rootRevision={vaultRootRevision}
                 createRevision={vaultCreateRevision}
+                onLedgerChanged={() => void loadVaultBalances()}
+                onNavigate={() =>
+                  listRef.current?.scrollTo({ y: 0, animated: false })
+                }
               />
             ) : (
               <>

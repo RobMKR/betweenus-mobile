@@ -144,7 +144,7 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   const disk = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("betweenus.offline-ledger.v1")),
   );
-  assert.equal(disk.version, 2);
+  assert.equal(disk.version, 3);
   assert.equal(disk.people.length, 2);
   assert.notEqual(disk.people[0].id, disk.people[1].id);
   assert.deepEqual(
@@ -228,6 +228,7 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
         email: id === owner ? "alice@example.com" : "bob@example.com",
       });
     if (url.endsWith("/debts")) return json({ debts: [] });
+    if (url.endsWith("/vault-balances")) return json({ balances: [] });
     if (url.endsWith("/balances")) return json({ balances: [] });
     if (url.endsWith("/people")) {
       if (req.method() === "POST") {

@@ -28,6 +28,22 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
           expires_at: 1,
         }),
       );
+      localStorage.setItem(
+        "betweenus.offline-ledger.v1",
+        JSON.stringify({
+          version: 2,
+          records: [],
+          vaults: [],
+          people: Array.from({ length: 13 }, (_, i) => ({
+            id: `player-${i + 1}`,
+            name: `Player ${i + 1}`,
+            source: "custom",
+            email: null,
+            phone: null,
+            createdAt: "2026-01-01T00:00:00Z",
+          })),
+        }),
+      );
       sessionStorage.setItem("seeded", "1");
     }
   });
@@ -51,21 +67,17 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
   await button("Create vault").click();
   await page.getByLabel("Vault name", { exact: true }).fill("Friday football");
   await button("Permanent").click();
+  for (const checkbox of await page.getByRole("checkbox").all())
+    await checkbox.click();
   await button("Save vault").click();
   await button("Add event expense").click();
   await page.getByLabel("Event title", { exact: true }).fill("Pitch booking");
   await page.getByLabel("Event date", { exact: true }).fill("2026-11-21");
-  await page.getByLabel("Event total · AED", { exact: true }).fill("630");
-  const roster = [
-    "You",
-    ...Array.from({ length: 13 }, (_, i) => `Player ${i + 1}`),
-  ].join("\n");
-  await page
-    .getByLabel("Participants · one name per line", { exact: true })
-    .fill(roster);
-  await button("You (me)").click();
-  await button("You paid").click();
-  await button("Save event expense").click();
+  await page.getByLabel("Total amount (AED)", { exact: true }).fill("630");
+  await button("Next").click();
+  await page.getByText("14 participants", { exact: true }).waitFor();
+  await button("Next").click();
+  await button("Save event").click();
   await page.getByText("Owed to you · AED 585.00", { exact: true }).waitFor();
   await page.getByText(/14 equal shares. Your own share AED 45.00/).waitFor();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
@@ -123,15 +135,14 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
   await page.getByText("Friday football", { exact: true }).click();
   await button("Reactivate vault").click();
   await button("Add event expense").click();
-  assert.equal(
-    await page
-      .getByLabel("Participants · one name per line", { exact: true })
-      .inputValue(),
-    roster,
-  );
   await page.getByLabel("Event title", { exact: true }).fill("Next week");
-  await page.getByLabel("Event total · AED", { exact: true }).fill("70");
-  await button("Save event expense").click();
+  await page.getByLabel("Total amount (AED)", { exact: true }).fill("70");
+  await button("Next").click();
+  await page.getByText("14 participants", { exact: true }).waitFor();
+  for (const checkbox of await page.getByRole("checkbox").all())
+    await expect(checkbox).toBeChecked();
+  await button("Next").click();
+  await button("Save event").click();
   await page.getByText("Owed to you · AED 65.00", { exact: true }).waitFor();
   await button("‹ Back to vault").click();
   await page.getByText("Event expenses · 2", { exact: true }).waitFor();

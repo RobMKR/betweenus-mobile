@@ -29,6 +29,15 @@ export const DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === "true";
 export const API_URL = (
   process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001"
 ).replace(/\/$/, "");
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
 export async function request<T>(
   path: string,
   token: string,
@@ -44,12 +53,14 @@ export async function request<T>(
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok)
-    throw new Error(
+    throw new ApiRequestError(
       typeof result.error === "string"
         ? result.error
         : result.message ||
             result.error?.message ||
             `Request failed (${response.status})`,
+      response.status,
+      typeof result.error?.code === "string" ? result.error.code : undefined,
     );
   return result as T;
 }

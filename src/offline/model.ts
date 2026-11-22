@@ -26,6 +26,8 @@ export type Event = {
   payerId: string;
   participants: Person[];
   payments: Record<string, Payment[]>;
+  splitMode?: "equal" | "manual";
+  shares?: Record<string, number>;
 };
 export type Vault = {
   id: string;
@@ -36,13 +38,13 @@ export type Vault = {
   memberIds?: string[];
 };
 export type Ledger = {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   records: LocalRecord[];
   vaults: Vault[];
   people?: SavedPerson[];
 };
 export const emptyLedger = (): Ledger => ({
-  version: 2,
+  version: 3,
   people: [],
   records: [],
   vaults: [],
@@ -168,27 +170,33 @@ export function createEvent(input: {
     payments: {},
   };
 }
+export function eventShares(event: Event): Record<string, number> {
+  return event.shares || split(event.totalMinor, event.participants);
+}
 export function eventRemaining(event: Event, personId: string) {
   if (!event.participants.some((p) => p.id === personId))
     throw new Error("Participant not found.");
   return personId === event.payerId
     ? 0
-    : remaining(
-        split(event.totalMinor, event.participants)[personId],
-        historyFor(event, personId),
-      );
+    : remaining(eventShares(event)[personId], historyFor(event, personId));
 }
 export function eventBalances(event: Event) {
-  const self = event.participants.find((p) => p.isSelf)!;
-  return event.payerId === self.id
+  const self = event.participants.find((person) => person.isSelf);
+  const selfPaid =
+    event.payerId === self?.id ||
+    (event.splitMode !== undefined && event.payerId === "self");
+  return selfPaid
     ? {
         receivableMinor: event.participants.reduce(
-          (sum, p) => sum + eventRemaining(event, p.id),
+          (sum, person) => sum + eventRemaining(event, person.id),
           0,
         ),
         payableMinor: 0,
       }
-    : { receivableMinor: 0, payableMinor: eventRemaining(event, self.id) };
+    : {
+        receivableMinor: 0,
+        payableMinor: self ? eventRemaining(event, self.id) : 0,
+      };
 }
 export function eventPayment(
   event: Event,
@@ -198,7 +206,7 @@ export function eventPayment(
   if (personId === event.payerId)
     throw new Error("The payer has no repayment due.");
   eventRemaining(event, personId);
-  const share = split(event.totalMinor, event.participants)[personId];
+  const share = eventShares(event)[personId];
   return {
     ...event,
     payments: {
@@ -296,14 +304,14 @@ export function validateLedger(value: unknown): Ledger {
   const data = value as Ledger;
   if (
     !data ||
-    ![1, 2].includes(data.version) ||
+    ![1, 2, 3].includes(data.version) ||
     !Array.isArray(data.records) ||
     !Array.isArray(data.vaults)
   )
     throw new Error("Unsupported or damaged local records.");
   if (data.version === 1 && data.people !== undefined)
     throw new Error("Unsupported legacy People data.");
-  if (data.version === 2 && !Array.isArray(data.people))
+  if (data.version >= 2 && !Array.isArray(data.people))
     throw new Error("Invalid saved People data.");
   const personIds = new Set<string>();
   for (const person of data.people || []) {
@@ -345,8 +353,7 @@ export function validateLedger(value: unknown): Ledger {
     )
       throw new Error("Invalid vault.");
     if (v.memberIds !== undefined) {
-      if (data.version !== 2)
-        throw new Error("Unsupported legacy roster data.");
+      if (data.version < 2) throw new Error("Unsupported legacy roster data.");
       validateMemberIds(v.memberIds, personIds);
     }
     for (const e of v.events) {
@@ -354,16 +361,37 @@ export function validateLedger(value: unknown): Ledger {
       text(e.title, "Event title");
       validDate(e.date);
       validMinor(e.totalMinor);
+      const snapshot = e.splitMode !== undefined || e.shares !== undefined;
       if (
         !Array.isArray(e.participants) ||
-        e.participants.filter((p) => p.isSelf === true).length !== 1 ||
-        e.participants.some((p) => typeof p.isSelf !== "boolean")
+        e.participants.some((person) => typeof person.isSelf !== "boolean")
       )
         throw new Error("Invalid participants.");
-      participants(
-        e.participants.map((p) => p.name),
-        e.participants.findIndex((p) => p.isSelf),
-      );
+      if (snapshot) {
+        if (
+          data.version !== 3 ||
+          !["equal", "manual"].includes(e.splitMode!) ||
+          !e.shares ||
+          typeof e.shares !== "object" ||
+          Array.isArray(e.shares) ||
+          e.participants.length < 1 ||
+          e.participants.length > 100 ||
+          e.participants.filter((person) => person.isSelf).length > 1
+        )
+          throw new Error("Invalid split snapshot.");
+        for (const person of e.participants) {
+          text(person.name, "Participant name", 100);
+          if (person.isSelf !== (person.id === "self"))
+            throw new Error("Invalid self participant.");
+        }
+      } else {
+        if (e.participants.filter((person) => person.isSelf).length !== 1)
+          throw new Error("Invalid legacy self participant.");
+        participants(
+          e.participants.map((person) => person.name),
+          e.participants.findIndex((person) => person.isSelf),
+        );
+      }
       const pids = new Set<string>();
       for (const p of e.participants) {
         text(p.id, "Participant ID");
@@ -371,13 +399,38 @@ export function validateLedger(value: unknown): Ledger {
         pids.add(p.id);
       }
       if (
-        !pids.has(e.payerId) ||
+        (!pids.has(e.payerId) && !(snapshot && e.payerId === "self")) ||
         !e.payments ||
         typeof e.payments !== "object" ||
         Array.isArray(e.payments)
       )
         throw new Error("Invalid event payer.");
-      const shares = split(e.totalMinor, e.participants);
+      const shares = eventShares(e);
+      if (snapshot) {
+        if (
+          Object.keys(shares).length !== pids.size ||
+          Object.keys(shares).some((pid) => !pids.has(pid)) ||
+          e.participants.some(
+            (person) =>
+              !Object.hasOwn(shares, person.id) ||
+              !Number.isSafeInteger(shares[person.id]) ||
+              shares[person.id] < 0 ||
+              shares[person.id] > MAX_MINOR,
+          ) ||
+          Object.values(shares).reduce((sum, share) => sum + share, 0) !==
+            e.totalMinor
+        )
+          throw new Error("Invalid allocated shares.");
+        if (e.splitMode === "equal") {
+          const expected = split(e.totalMinor, e.participants);
+          if (
+            e.participants.some(
+              (person) => expected[person.id] !== shares[person.id],
+            )
+          )
+            throw new Error("Invalid equal split snapshot.");
+        }
+      }
       for (const [pid, history] of Object.entries(e.payments)) {
         if (!pids.has(pid) || pid === e.payerId)
           throw new Error("Invalid payment participant.");
@@ -388,8 +441,10 @@ export function validateLedger(value: unknown): Ledger {
   return data;
 }
 
-/** Read-only upgrade; the original v1 disk value is retained until a successful write. */
+/** Read-only upgrade; original v1/v2 disk data is retained until a successful write. */
 export function migrateLedger(value: unknown): Ledger {
   const data = validateLedger(value);
-  return data.version === 1 ? { ...data, version: 2, people: [] } : data;
+  return data.version < 3
+    ? { ...data, version: 3, people: data.people || [] }
+    : data;
 }
