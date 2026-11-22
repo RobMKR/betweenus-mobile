@@ -55,6 +55,37 @@ Create a title-only temporary/permanent vault, choose zero to100 saved people, t
 
 Account Vaults uses owner-private `/v1/vaults` and idempotent member add/remove routes from the companion API. Device vaults remain separate. A multi-member save can partially succeed server-side; the draft retains the desired selection and retry completes the remaining changes. Vault creation itself is not idempotent: after an interrupted response, close the draft and refresh the list before creating again. The account event ledger supports equal/manual splits, partial/full payments, undo history and archive/reactivation through the companion API event routes. Private vault balances (including archived unpaid events) are shown separately from borrower-confirmed shared-debt balances. No paid/free gating is added.
 
+## Phone preview on GitHub Pages
+
+Open the [BetweenUs phone preview](https://betweenus-tech.github.io/betweenus-mobile/) and choose **Use offline — free** for the device-only ledger. GitHub Pages serves the Expo web app at the former standalone demo URL. The sample demo ledger uses a separate browser storage key and its records do not carry over.
+
+The browser needs a connection to load the site. The device-only ledger makes no API requests and saves records in this browser on this origin. Clearing site data removes those records. The web preview uses browser date inputs and manual contact entry. Use a native build to evaluate the native date picker and contacts integration.
+
+Account ledger requests from this preview require the API to allow the exact origin `https://betweenus-tech.github.io` in CORS and to run the compatible account endpoints. The current public API does not allow that origin. Device-only mode is available independently.
+
+### Publish an update
+
+From a clean checkout of reviewed `main`, use Node 24 and the committed lockfile. Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the shell to the project's public client values before exporting. All `EXPO_PUBLIC_*` values referenced by the app can be read by anyone with the bundle. The Pages export skips local `.env` files.
+
+```sh
+npm ci
+EXPO_PUBLIC_API_URL=https://3-1-51-32.sslip.io npm run export:pages
+```
+
+For a local production preview, copy the export to the project path under a temporary document root. In a second terminal, run the browser smoke against that URL.
+
+```sh
+preview_root=$(mktemp -d)
+cp -R dist "$preview_root/betweenus-mobile"
+python3 -m http.server 8083 --bind 127.0.0.1 --directory "$preview_root"
+```
+
+```sh
+OFFLINE_TEST_URL=http://127.0.0.1:8083/betweenus-mobile/ OFFLINE_TEST_WIDTH=390 npm run test:offline-browser
+```
+
+Manually replace the contents of a clean `gh-pages` checkout with the contents of `dist/`, including `.nojekyll` and the `_expo` directory. Remove stale generated files, commit the result with the source `main` SHA in the commit message, and push to `gh-pages`. GitHub Pages publishes from the root of that branch. Verify the published URL after GitHub's Pages build completes. Changes on `main` require a fresh export and publication.
+
 ## Shared account mode and local API demo
 
 Choose **Use account mode** for the existing email sign-in and shared confirmation workflow. It requires a configured Supabase project and authenticated API. It does not synchronize offline records. No subscription or billing system is implemented; account pricing is not committed here.
