@@ -37,6 +37,7 @@ test("new drafts use local calendar parts and independent mutable fields", () =>
   assert.equal(first.date, "2026-11-21");
   assert.equal(first.includeMe, true);
   assert.equal(first.payerId, "self");
+  assert.equal(first.partialPayments, false);
   first.manualAmounts.self = "10";
   first.selectedPersonIds.push("a");
   assert.deepEqual(second.manualAmounts, {});
@@ -95,6 +96,7 @@ test("equal remainder follows self-first then selected-person order; equal DTO o
     participantIds: ["self", "b", "a"],
     payerId: "self",
     splitMode: "equal",
+    partialPayments: false,
   });
 });
 
@@ -102,6 +104,7 @@ test("manual zero is valid and exact shares produce only ordered active allocati
   const input = draft({
     amount: "1.01",
     splitMode: "manual",
+    partialPayments: true,
     manualAmounts: { self: "0", a: "1", b: "0.01", removed: "999" },
   });
   const result = buildEventSubmission(input, people);
@@ -110,6 +113,7 @@ test("manual zero is valid and exact shares produce only ordered active allocati
     { participantId: "a", shareMinor: 100 },
     { participantId: "b", shareMinor: 1 },
   ]);
+  assert.equal(result.partialPayments, true);
   assert.equal("clientRequestId" in result, false);
   assert.equal("manualAmounts" in result, false);
 });

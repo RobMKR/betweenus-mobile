@@ -27,6 +27,7 @@ export type Event = {
   participants: Person[];
   payments: Record<string, Payment[]>;
   splitMode?: "equal" | "manual";
+  partialPayments?: boolean;
   shares?: Record<string, number>;
 };
 export type Vault = {
@@ -205,7 +206,9 @@ export function eventPayment(
 ): Event {
   if (personId === event.payerId)
     throw new Error("The payer has no repayment due.");
-  eventRemaining(event, personId);
+  const due = eventRemaining(event, personId);
+  if (event.partialPayments === false && value < due)
+    throw new Error("Record the full remaining share.");
   const share = eventShares(event)[personId];
   return {
     ...event,
@@ -361,6 +364,11 @@ export function validateLedger(value: unknown): Ledger {
       text(e.title, "Event title");
       validDate(e.date);
       validMinor(e.totalMinor);
+      if (
+        e.partialPayments !== undefined &&
+        typeof e.partialPayments !== "boolean"
+      )
+        throw new Error("Invalid partial payments setting.");
       const snapshot = e.splitMode !== undefined || e.shares !== undefined;
       if (
         !Array.isArray(e.participants) ||

@@ -10,6 +10,7 @@ export type EventDraft = {
   payerId: string | null;
   splitMode: "equal" | "manual";
   manualAmounts: Record<string, string>;
+  partialPayments: boolean;
 };
 export type EventAllocation = { participantId: string; shareMinor: number };
 export type EventSubmission = {
@@ -21,6 +22,7 @@ export type EventSubmission = {
   payerId: string;
   splitMode: "equal" | "manual";
   allocations?: EventAllocation[];
+  partialPayments: boolean;
 };
 export type AllocationPreview = {
   participantIds: string[];
@@ -44,6 +46,7 @@ export function newEventDraft(now = new Date()): EventDraft {
     payerId: "self",
     splitMode: "equal",
     manualAmounts: {},
+    partialPayments: false,
   };
 }
 
@@ -193,6 +196,7 @@ export function buildEventSubmission(
     participantIds: preview.participantIds,
     payerId: draft.payerId,
     splitMode: draft.splitMode,
+    partialPayments: draft.partialPayments,
     ...(draft.splitMode === "manual"
       ? { allocations: preview.allocations }
       : {}),

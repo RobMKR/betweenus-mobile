@@ -23,11 +23,13 @@ export const c = {
 };
 export function Button({
   title,
+  accessibilityLabel,
   onPress,
   secondary = false,
   disabled = false,
 }: {
   title: string;
+  accessibilityLabel?: string;
   onPress: () => void;
   secondary?: boolean;
   disabled?: boolean;
@@ -35,6 +37,7 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       onPress={onPress}
       style={[s.button, secondary && s.secondary, disabled && { opacity: 0.5 }]}

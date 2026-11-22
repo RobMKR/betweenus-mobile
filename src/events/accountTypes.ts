@@ -23,6 +23,7 @@ export type AccountEvent = {
   totalMinor: number;
   payerId: string;
   splitMode: "equal" | "manual";
+  partialPayments?: boolean;
   participants: EventParticipant[];
   payments: EventPayment[];
   createdAt: string;
@@ -63,7 +64,12 @@ export function moneyIntentKey(resource: string, body: object): string {
 }
 
 export type AccountMoneyIntent = { clientRequestId: string } & (
-  | { kind: "event"; body: EventSubmission }
+  | {
+      kind: "event";
+      body: Omit<EventSubmission, "partialPayments"> & {
+        partialPayments?: boolean;
+      };
+    }
   | {
       kind: "payment";
       eventId: string;

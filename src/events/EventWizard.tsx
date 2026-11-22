@@ -346,6 +346,16 @@ function WizardSession({
               inputMode="decimal"
               editable={!locked}
             />
+            <View style={styles.selection}>
+              <Text style={[s.label, styles.personText]}>Partial payments</Text>
+              <Switch
+                accessibilityLabel="Partial payments"
+                value={draft.partialPayments}
+                disabled={locked}
+                onValueChange={(partialPayments) => update({ partialPayments })}
+                trackColor={{ true: c.green }}
+              />
+            </View>
           </>
         )}
 
