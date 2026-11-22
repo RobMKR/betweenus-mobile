@@ -22,6 +22,7 @@ const api = async (path, body, token = "demo-lender") => {
 const money = (value) =>
   `AED ${(value / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 (async () => {
+  const startedAt = Date.now();
   const health = await api("/health");
   assert.equal(health.mode, "local-demo");
   assert.equal(health.storage, "ephemeral-memory");
@@ -429,6 +430,12 @@ const money = (value) =>
     savedEvents.find((item) => item.id === eventId).payments.length,
     4,
   );
+  // The local API limits each IP to 100 requests per minute. Both fixtures
+  // and browser requests share that IP, so begin the extended flow in a new window.
+  const cooldown = 61_000 - (Date.now() - startedAt);
+  if (cooldown > 0)
+    await new Promise((resolve) => setTimeout(resolve, cooldown));
+
   const paid = b("Mark Player 1 paid");
   await expect(paid).toHaveText("Paid");
   failPayment = true;
