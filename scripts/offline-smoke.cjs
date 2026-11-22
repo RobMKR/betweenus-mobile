@@ -2,16 +2,22 @@
 const { chromium, expect } = require("@playwright/test");
 const assert = require("node:assert/strict");
 const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
+const width = Number(process.env.OFFLINE_TEST_WIDTH || 430);
 (async () => {
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
     args: ["--no-sandbox"],
     headless: true,
   });
-  const page = await browser.newPage({ viewport: { width: 430, height: 932 } });
+  const page = await browser.newPage({ viewport: { width, height: 932 } });
   const external = [],
+    failedResponses = [],
     errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  page.on("response", (response) => {
+    if (response.status() >= 400)
+      failedResponses.push(`${response.status()} ${response.url()}`);
+  });
   await page.route("**/*", (route) => {
     if (new URL(route.request().url()).origin === new URL(origin).origin)
       return route.continue();
@@ -250,6 +256,7 @@ const origin = process.env.OFFLINE_TEST_URL || "http://localhost:8083";
   await page.getByText("sam", { exact: true }).click();
   await page.getByText("Personal records · 2", { exact: true }).waitFor();
   assert.deepEqual(external, []);
+  assert.deepEqual(failedResponses, []);
   assert.deepEqual(errors, []);
   console.log(
     "PASS offline four tabs: football split/payments/undo, archive balances, multiple events, name grouping/directions, People and Vaults root taps and detail back, mode/reload persistence, failed-write retry, 320/430 no overflow, no external requests.",
