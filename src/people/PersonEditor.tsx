@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
-import { Button, Choice, Field, Sheet, s } from "../offline/ui";
+import { Button, Choice, Field, Sheet, useUi } from "../offline/ui";
 import { choosePhoneContact, type PhoneContact } from "./phoneContacts";
 import { personFields, type PersonInput, type PersonSource } from "./model";
 export default function PersonEditor({
@@ -18,6 +18,7 @@ export default function PersonEditor({
   error?: string;
   note?: string;
 }) {
+  const { s } = useUi();
   const [name, setName] = useState(""),
     [email, setEmail] = useState(""),
     [phone, setPhone] = useState("");

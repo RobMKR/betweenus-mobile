@@ -2,13 +2,14 @@ import React from "react";
 import { Text, View } from "react-native";
 import { validDate } from "./model";
 import type { EventDateFieldProps } from "./eventDate";
-import { s } from "./ui";
+import { useUi } from "./ui";
 /** Browser date input is separate so native bundles never import DOM controls. */
 export default function EventDateField({
   value,
   onChange,
   disabled = false,
 }: EventDateFieldProps) {
+  const { scheme, c, s } = useUi();
   return (
     <View style={{ gap: 8 }}>
       <Text style={s.label}>Event date</Text>
@@ -36,10 +37,11 @@ export default function EventDateField({
           width: "100%",
           minHeight: 52,
           padding: 15,
-          border: "1px solid #d5ded3",
+          border: `1px solid ${c.inputBorder}`,
           borderRadius: 12,
-          background: "white",
-          color: "#203b35",
+          background: c.surface,
+          colorScheme: scheme,
+          color: c.ink,
           font: "inherit",
           fontSize: 16,
         }}

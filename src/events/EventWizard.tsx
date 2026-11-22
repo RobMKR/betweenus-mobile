@@ -1,8 +1,10 @@
+import { palettes } from "../appearance/colors";
+import type { AppColorScheme } from "../appearance/preference";
 import React, { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import EventDateField from "../offline/EventDateField";
-import { Button, Field, Sheet, c, s } from "../offline/ui";
+import { Button, Field, Sheet, useUi, uiStyles } from "../offline/ui";
 import PersonEditor from "../people/PersonEditor";
 import type { PersonInput, SavedPerson } from "../people/model";
 import {
@@ -48,6 +50,8 @@ function Selection({
   disabled?: boolean;
   onPress: () => void;
 }) {
+  const { scheme, c, s } = useUi();
+  const styles = stylesByScheme[scheme];
   return (
     <Pressable
       accessibilityRole={role}
@@ -72,7 +76,7 @@ function Selection({
               ? "checkbox"
               : "square-outline"
         }
-        color={c.green}
+        color={c.accent}
         size={22}
       />
     </Pressable>
@@ -96,6 +100,8 @@ function WizardSession({
   error = "",
   retrying = false,
 }: EventWizardProps) {
+  const { scheme, c, s } = useUi();
+  const styles = stylesByScheme[scheme];
   const [draft, setDraft] = useState<EventDraft>(() => ({
     ...newEventDraft(),
     selectedPersonIds: [...new Set(rosterIds)]
@@ -353,7 +359,9 @@ function WizardSession({
                 value={draft.partialPayments}
                 disabled={locked}
                 onValueChange={(partialPayments) => update({ partialPayments })}
-                trackColor={{ true: c.green }}
+                trackColor={{ false: c.switchTrack, true: c.action }}
+                ios_backgroundColor={c.switchTrack}
+                thumbColor={c.switchThumb}
               />
             </View>
           </>
@@ -368,7 +376,9 @@ function WizardSession({
                 value={draft.includeMe}
                 disabled={locked || (!draft.includeMe && count >= 100)}
                 onValueChange={(includeMe) => update({ includeMe })}
-                trackColor={{ true: c.green }}
+                trackColor={{ false: c.switchTrack, true: c.action }}
+                ios_backgroundColor={c.switchTrack}
+                thumbColor={c.switchThumb}
               />
             </View>
             <Text style={s.body} accessibilityLiveRegion="polite">
@@ -566,30 +576,44 @@ function WizardSession({
   );
 }
 
-const styles = StyleSheet.create({
-  header: { gap: 8 },
-  progress: { flexDirection: "row", gap: 6 },
-  segment: { flex: 1, height: 4, borderRadius: 2, backgroundColor: c.line },
-  completed: { backgroundColor: c.green },
-  group: { gap: 8 },
-  selection: {
-    ...s.rowBetween,
-    minHeight: 48,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: c.line,
-    borderRadius: 12,
-    backgroundColor: "white",
-  },
-  selected: { backgroundColor: c.pale, borderColor: c.green },
-  personText: { flex: 1, minWidth: 0 },
-  summary: { padding: 14, gap: 5, borderRadius: 12, backgroundColor: c.cream },
-  allocation: {
-    ...s.rowBetween,
-    minHeight: 44,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: c.line,
-  },
-});
+function createStyles(scheme: AppColorScheme) {
+  const c = palettes[scheme];
+  const s = uiStyles[scheme];
+  return StyleSheet.create({
+    header: { gap: 8 },
+    progress: { flexDirection: "row", gap: 6 },
+    segment: { flex: 1, height: 4, borderRadius: 2, backgroundColor: c.line },
+    completed: { backgroundColor: c.accent },
+    group: { gap: 8 },
+    selection: {
+      ...s.rowBetween,
+      minHeight: 48,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: c.line,
+      borderRadius: 12,
+      backgroundColor: c.surface,
+    },
+    selected: { backgroundColor: c.pale, borderColor: c.accent },
+    personText: { flex: 1, minWidth: 0 },
+    summary: {
+      padding: 14,
+      gap: 5,
+      borderRadius: 12,
+      backgroundColor: c.highlight,
+    },
+    allocation: {
+      ...s.rowBetween,
+      minHeight: 44,
+      paddingHorizontal: 4,
+      borderBottomWidth: 1,
+      borderBottomColor: c.line,
+    },
+  });
+}
+
+const stylesByScheme = {
+  light: createStyles("light"),
+  dark: createStyles("dark"),
+};

@@ -1,3 +1,4 @@
+import AppearanceSettings from "../appearance/AppearanceSettings";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -32,7 +33,7 @@ import {
   validDate,
 } from "./model";
 import { createLedgerStore } from "./storage";
-import { Button, c, Choice, Field, s, Sheet } from "./ui";
+import { Button, Choice, Field, Sheet, useUi } from "./ui";
 import OfflineOverview from "./OfflineOverview";
 import MemberPicker from "../vaults/MemberPicker";
 import { setVaultRoster, validateMemberIds } from "../vaults/roster";
@@ -51,6 +52,7 @@ import { localCalendarDate } from "./eventDate";
 type Form = "record" | "vault" | "roster" | "payment" | null;
 const today = localCalendarDate;
 export default function OfflineHome({ onExit }: { onExit: () => void }) {
+  const { c, s } = useUi();
   const listRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const store = useMemo(() => createLedgerStore(AsyncStorage), []);
   const active = useRef(true);
@@ -535,7 +537,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             {error}
           </Text>
         )}
-        {!ready && busy && <ActivityIndicator color={c.green} />}
+        {!ready && busy && <ActivityIndicator color={c.accent} />}
         {!ready && !busy && (
           <Button title="Retry opening records" onPress={() => void load()} />
         )}
@@ -890,7 +892,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                         >
                           <Text
                             style={{
-                              color: c.green,
+                              color: c.accent,
                               fontSize: 17,
                               fontWeight: "600",
                             }}
@@ -915,7 +917,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 ))}
                 {!people.length && (
                   <View style={s.empty}>
-                    <Ionicons name="people-outline" size={32} color={c.green} />
+                    <Ionicons
+                      name="people-outline"
+                      size={32}
+                      color={c.accent}
+                    />
                     <Text style={s.cardTitle}>Start with someone you know</Text>
                     <Text style={[s.body, { textAlign: "center" }]}>
                       Earlier personal records stay here. They are not
@@ -961,7 +967,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             {ledger.vaults.filter((v) => v.archived === archived).map(vaultRow)}
             {!ledger.vaults.some((v) => v.archived === archived) && (
               <View style={s.empty}>
-                <Ionicons name="albums-outline" size={32} color={c.green} />
+                <Ionicons name="albums-outline" size={32} color={c.accent} />
                 <Text style={s.cardTitle}>
                   {archived
                     ? "Nothing archived"
@@ -978,6 +984,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
         {tab === "settings" && (
           <>
             <Text style={s.title}>Settings</Text>
+            <AppearanceSettings />
             <View style={s.card}>
               <Text style={s.tag}>OFFLINE · FREE · DEVICE ONLY</Text>
               <Text style={s.cardTitle}>A private record on this device</Text>
@@ -1011,7 +1018,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
           </>
         )}
 
-        {busy && ready && <ActivityIndicator color={c.green} />}
+        {busy && ready && <ActivityIndicator color={c.accent} />}
       </ScrollView>
       {wizardVault && (
         <EventWizard
@@ -1190,7 +1197,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             {error}
           </Text>
         )}
-        {busy && <ActivityIndicator color={c.green} />}
+        {busy && <ActivityIndicator color={c.accent} />}
       </Sheet>
     </MobileShell>
   );

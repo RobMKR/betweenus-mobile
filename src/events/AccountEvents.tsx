@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { randomUUID } from "expo-crypto";
 import { amountToMinor, ApiRequestError, money, request } from "../api";
-import { Button, Field, Sheet, s } from "../offline/ui";
+import { Button, Field, Sheet, useUi } from "../offline/ui";
 import {
   personRequest,
   validateSavedPerson,
@@ -43,6 +43,7 @@ const ledgerRejections: Readonly<Record<string, number>> = {
 };
 
 export default function AccountEvents(props: AccountEventsProps) {
+  const { s } = useUi();
   const { vault, people, selectedEventId } = props;
   const latest = useRef(props);
   latest.current = props;

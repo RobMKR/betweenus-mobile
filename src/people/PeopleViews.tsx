@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Button, c, s } from "../offline/ui";
+import { Button, useUi } from "../offline/ui";
 import type { SavedPerson } from "./model";
 export function SavedPeopleList({
   people,
@@ -14,6 +14,7 @@ export function SavedPeopleList({
   onSelect: (id: string) => void;
   disabled?: boolean;
 }) {
+  const { c, s } = useUi();
   return (
     <>
       <View style={s.rowBetween}>
@@ -65,6 +66,7 @@ export function SavedPersonDetails({
   onDebt: () => void;
   children?: React.ReactNode;
 }) {
+  const { s } = useUi();
   return (
     <>
       <Pressable accessibilityRole="button" onPress={onBack}>

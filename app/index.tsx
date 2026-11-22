@@ -11,11 +11,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEMO } from "../src/api";
 import OfflineHome from "../src/offline/OfflineHome";
 import BrandMark from "../src/BrandMark";
-import { Button, c, s } from "../src/offline/ui";
+import { Button, useUi } from "../src/offline/ui";
 // Account code (and Supabase session restoration) is loaded only by explicit choice.
 const SharedHome = lazy(() => import("../src/SharedHome"));
 const MODE_KEY = "betweenus.mode.v1";
 export default function Home() {
+  const { c, s } = useUi();
   const [mode, setMode] = useState<"offline" | "account" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -55,7 +56,7 @@ export default function Home() {
   if (loading)
     return (
       <SafeAreaView style={[s.safe, { justifyContent: "center" }]}>
-        <ActivityIndicator color={c.green} />
+        <ActivityIndicator color={c.accent} />
       </SafeAreaView>
     );
   if (mode === "account")
@@ -63,7 +64,7 @@ export default function Home() {
       <Suspense
         fallback={
           <SafeAreaView style={[s.safe, { justifyContent: "center" }]}>
-            <ActivityIndicator color={c.green} />
+            <ActivityIndicator color={c.accent} />
           </SafeAreaView>
         }
       >

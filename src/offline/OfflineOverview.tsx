@@ -3,7 +3,7 @@ import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import type { Ledger, LocalRecord, Vault } from "./model";
 import { totals } from "./model";
 import { money } from "../api";
-import { Button, c, s } from "./ui";
+import { Button, useUi } from "./ui";
 export default function OfflineOverview({
   ledger,
   ready,
@@ -25,6 +25,7 @@ export default function OfflineOverview({
   recordRow: (r: LocalRecord) => React.ReactNode;
   vaultRow: (v: Vault) => React.ReactNode;
 }) {
+  const { c, s } = useUi();
   const balance = totals(ledger);
   const narrow = useWindowDimensions().width < 360;
   return (
@@ -37,14 +38,14 @@ export default function OfflineOverview({
         style={[
           s.card,
           {
-            backgroundColor: c.ink,
-            borderColor: c.ink,
+            backgroundColor: c.balance,
+            borderColor: c.balance,
             padding: 22,
             gap: 18,
           },
         ]}
       >
-        <Text style={[s.tag, { color: "#bdd4c2" }]}>
+        <Text style={[s.tag, { color: c.onBalanceMuted }]}>
           REMAINING ON YOUR RECORDS
         </Text>
         <View
@@ -57,22 +58,28 @@ export default function OfflineOverview({
           ]}
         >
           <View style={{ gap: 8, flex: 1 }}>
-            <Text style={{ color: "#bfd1c5", fontSize: 12 }}>Owed to you</Text>
+            <Text style={{ color: c.onBalanceMuted, fontSize: 12 }}>
+              Owed to you
+            </Text>
             <Text
               accessibilityLabel="Offline receivable"
-              style={{ fontSize: 24, fontWeight: "600", color: "white" }}
+              style={{ fontSize: 24, fontWeight: "600", color: c.onBalance }}
             >
               {ready ? money(balance.receivableMinor) : "—"}
             </Text>
           </View>
           <View style={{ gap: 8, flex: 1 }}>
-            <Text style={{ color: "#bfd1c5", fontSize: 12 }}>You owe</Text>
-            <Text style={{ fontSize: 24, fontWeight: "600", color: "white" }}>
+            <Text style={{ color: c.onBalanceMuted, fontSize: 12 }}>
+              You owe
+            </Text>
+            <Text
+              style={{ fontSize: 24, fontWeight: "600", color: c.onBalance }}
+            >
               {ready ? money(balance.payableMinor) : "—"}
             </Text>
           </View>
         </View>
-        <Text style={{ fontSize: 11, lineHeight: 17, color: "#b2c9b8" }}>
+        <Text style={{ fontSize: 11, lineHeight: 17, color: c.onBalanceMuted }}>
           Includes archived vaults. Your own notes, not confirmations from
           others.
         </Text>

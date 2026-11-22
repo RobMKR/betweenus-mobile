@@ -1,6 +1,6 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
-import { Button, c, s } from "../offline/ui";
+import { Button, useUi } from "../offline/ui";
 import type { SavedPerson } from "../people/model";
 
 export default function MemberPicker({
@@ -16,6 +16,7 @@ export default function MemberPicker({
   onAddPerson: () => void;
   disabled?: boolean;
 }) {
+  const { c, s } = useUi();
   const selected = new Set(selectedIds);
   return (
     <View style={{ gap: 12 }}>
@@ -48,7 +49,7 @@ export default function MemberPicker({
             }
             style={[
               s.card,
-              { minHeight: 60, borderColor: checked ? c.green : c.line },
+              { minHeight: 60, borderColor: checked ? c.accent : c.line },
               blocked && { opacity: 0.5 },
             ]}
           >
