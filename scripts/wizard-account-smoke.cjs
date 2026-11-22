@@ -100,7 +100,9 @@ const money = (value) =>
     failBeforePayment = false,
     failUndo = true,
     holdList = false,
-    heldList = null;
+    heldList = null,
+    holdVaultRefresh = false,
+    heldVaultRefresh = null;
   await page.route("**/*", async (route) => {
     const request = route.request(),
       url = new URL(request.url());
@@ -160,6 +162,18 @@ const money = (value) =>
       request.method() === "GET"
     ) {
       heldList = { route, result, status: response.status };
+      return;
+    }
+    if (
+      holdVaultRefresh &&
+      request.method() === "GET" &&
+      path === `/v1/vaults/${vault.id}`
+    ) {
+      holdVaultRefresh = false;
+      heldVaultRefresh = {
+        request,
+        release: () => fulfill(result, response.status),
+      };
       return;
     }
     if (
@@ -331,10 +345,25 @@ const money = (value) =>
   await b("Open event Pitch booking").click();
   await page.getByText(/Receivable AED 545.00 · Payable AED 0.00/).waitFor();
   await b("Back to events").click();
+  holdVaultRefresh = true;
   await b("Archive vault").click();
-  await b("Reactivate vault").waitFor();
-  assert.equal((await api(`/v1/vaults/${vault.id}`)).vault.archived, true);
-  await expect(b("Add event expense")).toBeDisabled();
+  await expect.poll(() => Boolean(heldVaultRefresh)).toBe(true);
+  await b("Back to vaults").click();
+  await expect(b(`Open ${title}`)).toBeEnabled();
+  const refreshFinished = page.waitForEvent(
+    "requestfinished",
+    (request) => request === heldVaultRefresh.request,
+  );
+  await heldVaultRefresh.release();
+  await refreshFinished;
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
+  await expect(b(`Open ${title}`)).toBeVisible();
+  await expect(b("Back to vaults")).toHaveCount(0);
   await tab("Home");
   const privateBalance = (await api("/v1/vault-balances")).balances[0],
     confirmed = (await api("/v1/balances")).balances[0];
@@ -346,6 +375,8 @@ const money = (value) =>
   assert.ok(privateBalance.receivableMinor >= 54500);
   await tab("Vaults");
   await b(`Open ${title}`).click();
+  await b("Reactivate vault").waitFor();
+  await expect(b("Add event expense")).toBeDisabled();
   await b("Reactivate vault").click();
   await b("Archive vault").waitFor();
   await expect(b("Add event expense")).toBeEnabled();
@@ -425,7 +456,7 @@ const money = (value) =>
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   console.log(
-    "PASS real loopback demo API account wizard:630/14→585, same-ownerrefresh, event/payment lost response reconciled after close, refresh and navigation, identical saves use fresh UUIDs, failed-before-commit and undo retry use same UUID exactly once, overpayblock, fullremaining, reload, archive/reactivate, manualzero/custom/externalselfpayer, privatevsconfirmedbalances, crossownerstaleresponseisolation,320/430. Authmocked; no realemails/productioncalls.",
+    "PASS real loopback demo API account wizard:630/14→585, same-ownerrefresh, event/payment lost response reconciled after close, refresh and navigation, identical saves use fresh UUIDs, failed-before-commit and undo retry use same UUID exactly once, overpayblock, fullremaining, reload, archive/reactivate and Back during delayed vault refresh, manualzero/custom/externalselfpayer, privatevsconfirmedbalances, crossownerstaleresponseisolation,320/430. Authmocked; no realemails/productioncalls.",
   );
   await browser.close();
 })().catch((error) => {
