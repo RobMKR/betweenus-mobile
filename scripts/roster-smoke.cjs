@@ -4,6 +4,15 @@ const offlineURL = process.env.ROSTER_OFFLINE_URL || "http://localhost:8097";
 const accountURL = process.env.ROSTER_ACCOUNT_URL || "http://localhost:8098";
 const stamp = "2026-11-20T12:00:00Z";
 const owner = "11111111-1111-4111-8111-111111111111";
+const otherOwner = "22222222-2222-4222-8222-222222222222";
+const tokenFor = (sub) =>
+  [
+    Buffer.from('{"alg":"HS256"}').toString("base64url"),
+    Buffer.from(
+      JSON.stringify({ sub, exp: Math.floor(Date.now() / 1000) + 3600 }),
+    ).toString("base64url"),
+    "sig",
+  ].join(".");
 const saved = [
   "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -158,15 +167,9 @@ const event = {
     viewport: { width: 430, height: 932 },
   });
   account.on("pageerror", (e) => errors.push(e.message));
-  const jwt = [
-    Buffer.from('{"alg":"HS256"}').toString("base64url"),
-    Buffer.from(
-      JSON.stringify({ sub: owner, exp: Math.floor(Date.now() / 1000) + 3600 }),
-    ).toString("base64url"),
-    "sig",
-  ].join(".");
+  const otherToken = tokenFor(otherOwner);
   const session = {
-    access_token: jwt,
+    access_token: tokenFor(owner),
     refresh_token: "mock",
     expires_in: 3600,
     expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -189,8 +192,8 @@ const event = {
     history = [],
     failAdd = true,
     addCalls = 0,
-    holdList = false,
-    heldList;
+    holdPath,
+    heldRead;
   const detail = (vault) => ({
     vault,
     members: saved.filter((p) => vault.memberIds.includes(p.id)),
@@ -215,17 +218,25 @@ const event = {
           contentType: "application/json",
           body: JSON.stringify(body),
         });
+    const read = (body) => {
+      if (path !== holdPath) return json(body);
+      holdPath = undefined;
+      const snapshot = JSON.parse(JSON.stringify(body));
+      heldRead = { request: req, release: () => json(snapshot) };
+    };
+    const secondAccount =
+      req.headers().authorization === `Bearer ${otherToken}`;
     if (path.endsWith("/me"))
-      return json({ id: owner, email: "owner@example.com" });
+      return json(
+        secondAccount
+          ? { id: otherOwner, email: "other@example.com" }
+          : { id: owner, email: "owner@example.com" },
+      );
     if (path.endsWith("/debts")) return json({ debts: [] });
     if (path.endsWith("/balances")) return json({ balances: [] });
     if (path.endsWith("/people")) return json({ people: saved });
     if (path === "/v1/vaults" && req.method() === "GET") {
-      if (holdList) {
-        heldList = route;
-        return;
-      }
-      return json({ vaults });
+      return read({ vaults: secondAccount ? [] : vaults });
     }
     if (path === "/v1/vaults" && req.method() === "POST") {
       const input = req.postDataJSON();
@@ -255,7 +266,9 @@ const event = {
       return json(detail(vault), 201);
     }
     const vault = vaults[0];
-    if (path === `/v1/vaults/${vault?.id}`) return json(detail(vault));
+    if (path === `/v1/vaults/${vault?.id}`) {
+      return read(detail(vault));
+    }
     if (path.includes("/members")) {
       const { personId } = req.postDataJSON();
       if (path.endsWith("/remove")) {
@@ -282,8 +295,29 @@ const event = {
       await account.getByRole("dialog").waitFor({ state: "hidden" });
       await account.getByRole("tab", { name, exact: true }).click();
     };
+  async function delayRead(button, path = `/v1/vaults/${vaults[0].id}`) {
+    heldRead = undefined;
+    holdPath = path;
+    await ab(button).click();
+    await expect.poll(() => Boolean(heldRead)).toBe(true);
+  }
+  async function releaseRead() {
+    const finished = account.waitForEvent(
+      "requestfinished",
+      (request) => request === heldRead.request,
+    );
+    await heldRead.release();
+    await finished;
+    // Let the browser process the response and render any resulting state.
+    await account.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+  }
   await account.goto(accountURL);
-  await ab("Create vault").click();
+  await delayRead("Create vault", "/v1/vaults");
   await account
     .getByLabel("Vault title", { exact: true })
     .fill("Account football");
@@ -301,6 +335,11 @@ const event = {
   );
   await ab("Save vault").click();
   await account.getByRole("dialog").waitFor({ state: "hidden" });
+  await releaseRead();
+  await delayRead("Back to vaults", "/v1/vaults");
+  await expect(ab("Open Account football")).toBeVisible();
+  await releaseRead();
+  await ab("Open Account football").click();
   await ab("Manage members").click();
   await account.getByRole("checkbox").nth(0).click();
   await account.getByRole("checkbox").nth(2).click();
@@ -315,17 +354,61 @@ const event = {
   await account.getByRole("dialog").waitFor({ state: "hidden" });
   assert.deepEqual(vaults[0].memberIds, [saved[1].id, saved[2].id]);
   assert.equal(addCalls, 2);
+
+  await delayRead("Reload vault");
+  await ab("Manage members").click();
+  await account.getByRole("checkbox").nth(0).click();
+  await ab("Save members").click();
+  await account.getByRole("dialog").waitFor({ state: "hidden" });
+  await expect(account.getByText("Members · 3", { exact: true })).toBeVisible();
+  await releaseRead();
+  await expect(account.getByText("Members · 3", { exact: true })).toBeVisible();
+  await ab("Manage members").click();
+  await expect(account.getByRole("checkbox").nth(0)).toBeChecked();
+  await ab("Close details").click();
   await account.screenshot({
     path: "/tmp/betweenus-roster-account.png",
     fullPage: false,
   });
+  await delayRead("Reload vault");
+  await ab("Back to vaults").click();
+  await expect(ab("Open Account football")).toBeEnabled();
+  await releaseRead();
+  await expect(ab("Open Account football")).toBeVisible();
+
+  await delayRead("Open Account football");
   await at("Vaults");
+  await expect(ab("Open Account football")).toBeEnabled();
+  await releaseRead();
+  await expect(ab("Open Account football")).toBeVisible();
+
   await ab("Open Account football").click();
   await ab("Back to vaults").click();
   await expect(ab("Open Account football")).toBeVisible();
+
+  await delayRead("Open Account football");
+  await account.evaluate(
+    (data) => {
+      const channel = new BroadcastChannel("betweenus-auth-session");
+      channel.postMessage({ event: "SIGNED_IN", session: data });
+      channel.close();
+    },
+    {
+      ...session,
+      access_token: otherToken,
+      user: { ...session.user, id: otherOwner, email: "other@example.com" },
+    },
+  );
+  await expect(account.getByText("Your shared overview")).toBeVisible();
+  await at("Vaults");
+  const emptyVaults = account.getByText(/No vaults yet/);
+  await expect(emptyVaults).toBeVisible();
+  await releaseRead();
+  await expect(emptyVaults).toBeVisible();
+  await expect(ab("Open Account football")).toHaveCount(0);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS roster offline/account: duplicate-name IDs, nested custom entry, create/remove/reload, legacy snapshots, failed local write retry, same-owner refresh draft, partial API failure/idempotent retry, root/back navigation,320/430. No real APIs/contacts.",
+    "PASS roster offline/account: duplicate-name IDs, nested custom entry, create/remove/reload, legacy snapshots, failed local write retry, same-owner refresh draft, partial API failure/idempotent retry, delayed reads after create/save, root/Back navigation and owner switch, 320/430 widths. No real APIs/contacts.",
   );
   await browser.close();
 })().catch((e) => {

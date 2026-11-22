@@ -141,16 +141,18 @@ export default function AccountVaults({
     void loadList();
   }, [rootRevision]);
 
+  function backToList() {
+    detailRequest.current++;
+    setDetail(null);
+    void loadList();
+  }
+
   useEffect(() => {
     if (!detail || creating || managing || personEditor) return;
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
-        if (!busy) {
-          setDetail(null);
-          setError("");
-          void loadList();
-        }
+        if (!busy) backToList();
         return true;
       },
     );
@@ -201,6 +203,13 @@ export default function AccountVaults({
       throw new Error("Choose up to 100 different saved people.");
     }
   }
+  function invalidateReads() {
+    // Earlier GETs may describe the state before this confirmed write.
+    listRequest.current++;
+    detailRequest.current++;
+    setLoading(false);
+    setError("");
+  }
   async function saveVault() {
     if (saving.current) return;
     try {
@@ -223,6 +232,7 @@ export default function AccountVaults({
         { title: title.trim(), kind, memberIds: selectedIds },
       );
       if (!current(generation, owner)) return;
+      invalidateReads();
       setVaults((items) => [
         result.vault,
         ...items.filter((v) => v.id !== result.vault.id),
@@ -256,7 +266,6 @@ export default function AccountVaults({
       owner = latest.current.ownerId;
     const initial = detail;
     try {
-      let result = initial;
       // Each route is idempotent; preserve the desired draft if a later change fails.
       const removed = initial.vault.memberIds.filter(
         (id) => !selectedIds.includes(id),
@@ -269,12 +278,13 @@ export default function AccountVaults({
         [added, ""],
       ] as const) {
         for (const personId of ids) {
-          result = await request<VaultDetail>(
+          const result = await request<VaultDetail>(
             `/vaults/${encodeURIComponent(initial.vault.id)}/members${suffix}`,
             latest.current.token,
             { personId },
           );
           if (!current(generation, owner)) return;
+          invalidateReads();
           setDetail(result);
           setVaults((items) =>
             items.map((v) => (v.id === result.vault.id ? result.vault : v)),
@@ -359,11 +369,7 @@ export default function AccountVaults({
             title="Back to vaults"
             secondary
             disabled={busy}
-            onPress={() => {
-              setDetail(null);
-              setError("");
-              void loadList();
-            }}
+            onPress={backToList}
           />
           <Text style={s.eyebrow}>{detail.vault.kind.toUpperCase()} VAULT</Text>
           <Text style={s.title}>{detail.vault.title}</Text>
