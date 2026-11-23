@@ -1,3 +1,5 @@
+import { palettes, type ThemeColors } from "./appearance/colors";
+import { useAppearance } from "./appearance/AppearanceProvider";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -26,6 +28,8 @@ export default function AuthGate({
     identity: string,
   ) => React.ReactNode;
 }) {
+  const { scheme, colors } = useAppearance();
+  const styles = stylesByScheme[scheme];
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -162,7 +166,7 @@ export default function AuthGate({
           {loading ? (
             <ActivityIndicator
               accessibilityLabel="Loading account"
-              color="#176b50"
+              color={colors.accent}
             />
           ) : (
             <View style={styles.card}>
@@ -180,6 +184,9 @@ export default function AuthGate({
               {supabase && (
                 <>
                   <TextInput
+                    placeholderTextColor={colors.placeholder}
+                    selectionColor={colors.selection}
+                    keyboardAppearance={scheme}
                     accessibilityLabel="Email address"
                     style={styles.input}
                     value={email}
@@ -196,6 +203,9 @@ export default function AuthGate({
                         moment.
                       </Text>
                       <TextInput
+                        placeholderTextColor={colors.placeholder}
+                        selectionColor={colors.selection}
+                        keyboardAppearance={scheme}
                         accessibilityLabel="Email code"
                         style={styles.input}
                         value={code}
@@ -256,51 +266,59 @@ export default function AuthGate({
     </SafeAreaView>
   );
 }
-const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: "#f7f8f3",
-  },
-  header: { paddingHorizontal: 12, paddingVertical: 4 },
-  returnButton: {
-    minHeight: 44,
-    minWidth: 44,
-    alignSelf: "flex-start",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  returnText: {
-    color: "#176b50",
-    fontSize: 14,
-    lineHeight: 24,
-    fontWeight: "600",
-  },
-  content: { flexGrow: 1, justifyContent: "center", padding: 24 },
-  card: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 20 },
-  brand: { fontSize: 25, fontWeight: "700", color: "#203b35" },
-  title: {
-    fontSize: 35,
-    fontWeight: "600",
-    color: "#203b35",
-    letterSpacing: -1,
-  },
-  text: { fontSize: 14, lineHeight: 22, color: "#71817a" },
-  input: {
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#d5ded3",
-    borderRadius: 12,
-    fontSize: 16,
-    backgroundColor: "white",
-  },
-  button: {
-    backgroundColor: "#176b50",
-    padding: 17,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  buttonText: { color: "white", fontWeight: "600" },
-  link: { color: "#176b50", textAlign: "center", padding: 4 },
-  error: { color: "#a33131", lineHeight: 22 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: colors.paper,
+    },
+    header: { paddingHorizontal: 12, paddingVertical: 4 },
+    returnButton: {
+      minHeight: 44,
+      minWidth: 44,
+      alignSelf: "flex-start",
+      justifyContent: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    returnText: {
+      color: colors.accent,
+      fontSize: 14,
+      lineHeight: 24,
+      fontWeight: "600",
+    },
+    content: { flexGrow: 1, justifyContent: "center", padding: 24 },
+    card: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 20 },
+    brand: { fontSize: 25, fontWeight: "700", color: colors.ink },
+    title: {
+      fontSize: 35,
+      fontWeight: "600",
+      color: colors.ink,
+      letterSpacing: -1,
+    },
+    text: { fontSize: 14, lineHeight: 22, color: colors.muted },
+    input: {
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      borderRadius: 12,
+      fontSize: 16,
+      backgroundColor: colors.surface,
+      color: colors.ink,
+    },
+    button: {
+      backgroundColor: colors.action,
+      padding: 17,
+      borderRadius: 12,
+      alignItems: "center",
+    },
+    buttonText: { color: colors.onAction, fontWeight: "600" },
+    link: { color: colors.accent, textAlign: "center", padding: 4 },
+    error: { color: colors.errorText, lineHeight: 22 },
+  });
+}
+
+const stylesByScheme = {
+  light: createStyles(palettes.light),
+  dark: createStyles(palettes.dark),
+};

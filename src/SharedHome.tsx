@@ -1,3 +1,6 @@
+import { palettes, type ThemeColors } from "./appearance/colors";
+import { useAppearance } from "./appearance/AppearanceProvider";
+import AppearanceSettings from "./appearance/AppearanceSettings";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -31,14 +34,6 @@ import {
   accountPeople,
   confirmedPersonBalances,
 } from "./navigation/accountPeople";
-const colors = {
-  ink: "#203b35",
-  muted: "#71817a",
-  green: "#176b50",
-  pale: "#eaf2eb",
-  paper: "#f7f8f3",
-  line: "#e3e8df",
-};
 const labels = {
   pending: "Awaiting confirmation",
   accepted: "Confirmed",
@@ -73,6 +68,8 @@ function DebtHome({
   signOut?: () => Promise<void>;
   onExit?: () => void;
 }) {
+  const { scheme, colors } = useAppearance();
+  const s = sByScheme[scheme];
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -398,7 +395,7 @@ function DebtHome({
         onPress={action}
         style={[s.button, secondary && s.secondary, disabled && s.disabled]}
       >
-        <Text style={[s.buttonText, secondary && { color: colors.green }]}>
+        <Text style={[s.buttonText, secondary && { color: colors.accent }]}>
           {title}
         </Text>
       </Pressable>
@@ -429,7 +426,7 @@ function DebtHome({
             >
               <Text
                 style={{
-                  color: filter === value ? "white" : colors.ink,
+                  color: filter === value ? colors.onAction : colors.ink,
                   fontWeight: "600",
                 }}
               >
@@ -511,6 +508,9 @@ function DebtHome({
               </Text>
               {button("Confirm debt", () => void respond("accept"))}
               <TextInput
+                placeholderTextColor={colors.placeholder}
+                selectionColor={colors.selection}
+                keyboardAppearance={scheme}
                 accessibilityLabel="Dispute reason"
                 value={reason}
                 onChangeText={setReason}
@@ -569,6 +569,9 @@ function DebtHome({
             refreshControl={
               tab === "home" || tab === "people" ? (
                 <RefreshControl
+                  tintColor={colors.accent}
+                  colors={[colors.accent]}
+                  progressBackgroundColor={colors.surface}
                   refreshing={busy}
                   onRefresh={() => {
                     void refresh();
@@ -586,7 +589,7 @@ function DebtHome({
             {busy && !loaded && (
               <ActivityIndicator
                 accessibilityLabel="Loading requests"
-                color={colors.green}
+                color={colors.accent}
               />
             )}
             {detail ? (
@@ -757,7 +760,7 @@ function DebtHome({
                       {peopleLoading && (
                         <ActivityIndicator
                           accessibilityLabel="Loading saved people"
-                          color={colors.green}
+                          color={colors.accent}
                         />
                       )}
                       <Text style={s.sectionTitle}>
@@ -901,6 +904,7 @@ function DebtHome({
             ) : (
               <>
                 <Text style={s.title}>Settings</Text>
+                <AppearanceSettings />
                 <View style={s.card}>
                   <Text style={s.label}>
                     {DEMO ? "Local demo" : "Account mode"}
@@ -988,6 +992,9 @@ function DebtHome({
               </Text>
               <Text style={s.label}>Who owes you?</Text>
               <TextInput
+                placeholderTextColor={colors.placeholder}
+                selectionColor={colors.selection}
+                keyboardAppearance={scheme}
                 accessibilityLabel="Borrower email"
                 value={email}
                 onChangeText={setEmail}
@@ -999,6 +1006,9 @@ function DebtHome({
               />
               <Text style={s.label}>Amount · AED</Text>
               <TextInput
+                placeholderTextColor={colors.placeholder}
+                selectionColor={colors.selection}
+                keyboardAppearance={scheme}
                 accessibilityLabel="Amount in AED"
                 value={amount}
                 onChangeText={setAmount}
@@ -1008,6 +1018,9 @@ function DebtHome({
               />
               <Text style={s.label}>What was it for?</Text>
               <TextInput
+                placeholderTextColor={colors.placeholder}
+                selectionColor={colors.selection}
+                keyboardAppearance={scheme}
                 accessibilityLabel="Description"
                 value={note}
                 onChangeText={setNote}
@@ -1031,112 +1044,127 @@ function DebtHome({
     </>
   );
 }
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.paper },
-  page: {
-    width: "100%",
-    maxWidth: 760,
-    alignSelf: "center",
-    padding: 20,
-    paddingBottom: 32,
-    gap: 16,
-  },
-  title: {
-    fontSize: 29,
-    lineHeight: 35,
-    fontWeight: "600",
-    letterSpacing: -1,
-    color: colors.ink,
-  },
-  eyebrow: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    color: colors.green,
-  },
-  sectionTitle: { fontSize: 20, fontWeight: "600", color: colors.ink },
-  cardTitle: { fontSize: 15, fontWeight: "600", color: colors.ink },
-  body: { fontSize: 15, lineHeight: 22, color: colors.muted },
-  small: { fontSize: 12, lineHeight: 18, color: colors.muted },
-  label: { fontSize: 13, fontWeight: "600", color: colors.ink },
-  card: {
-    padding: 17,
-    borderRadius: 17,
-    backgroundColor: "white",
-    borderWidth: 1,
-    borderColor: colors.line,
-    gap: 12,
-  },
-  debt: {
-    padding: 17,
-    borderRadius: 17,
-    backgroundColor: "white",
-    borderWidth: 1,
-    borderColor: colors.line,
-    gap: 9,
-    minHeight: 80,
-  },
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-  },
-  amount: { fontSize: 19, fontWeight: "600", color: colors.ink },
-  status: { fontSize: 12, fontWeight: "600", color: colors.green },
-  balanceCard: {
-    backgroundColor: colors.ink,
-    padding: 22,
-    borderRadius: 22,
-    gap: 10,
-  },
-  balanceAmount: { fontSize: 32, fontWeight: "600", color: "white" },
-  balanceValue: { fontSize: 23, fontWeight: "600", color: "white" },
-  balanceSmall: { fontSize: 12, lineHeight: 18, color: "#d2e1d7" },
-  divider: { height: 1, backgroundColor: "#486255", marginVertical: 6 },
-  button: {
-    minHeight: 46,
-    padding: 13,
-    borderRadius: 12,
-    backgroundColor: colors.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonText: { fontSize: 14, fontWeight: "600", color: "white" },
-  secondary: { backgroundColor: colors.pale },
-  disabled: { opacity: 0.5 },
-  shortcuts: { gap: 10 },
-  filters: { gap: 8 },
-  filter: {
-    minHeight: 44,
-    paddingHorizontal: 15,
-    justifyContent: "center",
-    borderRadius: 22,
-    backgroundColor: colors.pale,
-  },
-  activeFilter: { backgroundColor: colors.ink },
-  input: {
-    minHeight: 51,
-    borderWidth: 1,
-    borderColor: "#d5ded3",
-    borderRadius: 11,
-    backgroundColor: "white",
-    padding: 15,
-    color: colors.ink,
-    fontSize: 16,
-  },
-  close: {
-    minHeight: 44,
-    minWidth: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  error: {
-    backgroundColor: "#fff0ed",
-    color: "#a33131",
-    fontSize: 14,
-    lineHeight: 21,
-    padding: 14,
-    borderRadius: 10,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: colors.paper },
+    page: {
+      width: "100%",
+      maxWidth: 760,
+      alignSelf: "center",
+      padding: 20,
+      paddingBottom: 32,
+      gap: 16,
+    },
+    title: {
+      fontSize: 29,
+      lineHeight: 35,
+      fontWeight: "600",
+      letterSpacing: -1,
+      color: colors.ink,
+    },
+    eyebrow: {
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 1.2,
+      color: colors.accent,
+    },
+    sectionTitle: { fontSize: 20, fontWeight: "600", color: colors.ink },
+    cardTitle: { fontSize: 15, fontWeight: "600", color: colors.ink },
+    body: { fontSize: 15, lineHeight: 22, color: colors.muted },
+    small: { fontSize: 12, lineHeight: 18, color: colors.muted },
+    label: { fontSize: 13, fontWeight: "600", color: colors.ink },
+    card: {
+      padding: 17,
+      borderRadius: 17,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.line,
+      gap: 12,
+    },
+    debt: {
+      padding: 17,
+      borderRadius: 17,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.line,
+      gap: 9,
+      minHeight: 80,
+    },
+    rowBetween: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 10,
+    },
+    amount: { fontSize: 19, fontWeight: "600", color: colors.ink },
+    status: { fontSize: 12, fontWeight: "600", color: colors.accent },
+    balanceCard: {
+      backgroundColor: colors.balance,
+      padding: 22,
+      borderRadius: 22,
+      gap: 10,
+    },
+    balanceAmount: { fontSize: 32, fontWeight: "600", color: colors.onBalance },
+    balanceValue: { fontSize: 23, fontWeight: "600", color: colors.onBalance },
+    balanceSmall: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: colors.onBalanceMuted,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: colors.balanceLine,
+      marginVertical: 6,
+    },
+    button: {
+      minHeight: 46,
+      padding: 13,
+      borderRadius: 12,
+      backgroundColor: colors.action,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    buttonText: { fontSize: 14, fontWeight: "600", color: colors.onAction },
+    secondary: { backgroundColor: colors.pale },
+    disabled: { opacity: 0.5 },
+    shortcuts: { gap: 10 },
+    filters: { gap: 8 },
+    filter: {
+      minHeight: 44,
+      paddingHorizontal: 15,
+      justifyContent: "center",
+      borderRadius: 22,
+      backgroundColor: colors.pale,
+    },
+    activeFilter: { backgroundColor: colors.action },
+    input: {
+      minHeight: 51,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      borderRadius: 11,
+      backgroundColor: colors.surface,
+      padding: 15,
+      color: colors.ink,
+      fontSize: 16,
+    },
+    close: {
+      minHeight: 44,
+      minWidth: 44,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    error: {
+      backgroundColor: colors.errorSurface,
+      color: colors.errorText,
+      fontSize: 14,
+      lineHeight: 21,
+      padding: 14,
+      borderRadius: 10,
+    },
+  });
+}
+
+const sByScheme = {
+  light: createStyles(palettes.light),
+  dark: createStyles(palettes.dark),
+};

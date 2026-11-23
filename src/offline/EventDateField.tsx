@@ -9,13 +9,14 @@ import {
   pickerDate,
   selectedCalendarDate,
 } from "./eventDate";
-import { c, s } from "./ui";
+import { useUi } from "./ui";
 export default function EventDateField({
   value,
   onChange,
   onEditingChange,
   disabled = false,
 }: EventDateFieldProps) {
+  const { scheme, c, s } = useUi();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Date>(() => pickerDate(value));
   const androidOpen = useRef(false);
@@ -68,7 +69,7 @@ export default function EventDateField({
         style={[s.input, s.rowBetween]}
       >
         <Text style={{ fontSize: 16, color: c.ink }}>{value}</Text>
-        <Ionicons name="calendar-outline" size={21} color={c.green} />
+        <Ionicons name="calendar-outline" size={21} color={c.accent} />
       </Pressable>
       {open && (
         <View style={[s.card, { paddingHorizontal: 0 }]}>
@@ -100,8 +101,8 @@ export default function EventDateField({
             display="spinner"
             onValueChange={(_event, date) => setDraft(date)}
             onDismiss={finish}
-            themeVariant="light"
-            accentColor={c.green}
+            themeVariant={scheme}
+            accentColor={c.accent}
             style={{ alignSelf: "stretch", height: 216 }}
           />
         </View>

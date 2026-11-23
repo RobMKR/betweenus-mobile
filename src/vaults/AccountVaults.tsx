@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { BackHandler, Text, View } from "react-native";
 import AccountEvents from "../events/AccountEvents";
 import { request, type Balance } from "../api";
-import { Button, Choice, Field, Sheet, s } from "../offline/ui";
+import { Button, Choice, Field, Sheet, useUi } from "../offline/ui";
 import PersonEditor from "../people/PersonEditor";
 import {
   personRequest,
@@ -59,6 +59,7 @@ export default function AccountVaults({
   onLedgerChanged?: () => void;
   onNavigate?: () => void;
 }) {
+  const { s } = useUi();
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [detail, setDetail] = useState<VaultDetail | null>(null);

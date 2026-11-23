@@ -45,12 +45,15 @@ These are the current CI checks, not evidence of native-device behavior. For doc
 
 Use the relevant smoke test for affected behavior; see the [README verification section](README.md#verification) for all prerequisites:
 
-| Scope                        | Prepare and serve                                                                                                                                                              | Verify                         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| Offline ledger/vaults        | `npm run export:offline-test`, then `python3 -m http.server 8083 --directory dist-offline` in another terminal                                                                 | `npm run test:offline-browser` |
-| Email auth/session isolation | `npm run export:auth-test`, then `python3 -m http.server 8082 --directory dist-auth` in another terminal                                                                       | `npm run test:auth-browser`    |
-| Shared local demo            | Start `betweenus-api` with `npm run dev:demo`; set `EXPO_PUBLIC_API_URL=http://localhost:3001`; run `npm run export:demo`, then `python3 -m http.server 8081 --directory dist` | `npm run test:smoke`           |
+| Scope                        | Prepare and serve                                                                                                                                                              | Verify                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| Offline ledger/vaults        | `npm run export:offline-test`, then `python3 -m http.server 8083 --directory dist-offline` in another terminal                                                                 | `npm run test:offline-browser`      |
+| Email auth/session isolation | `npm run export:auth-test`, then `python3 -m http.server 8082 --directory dist-auth` in another terminal                                                                       | `npm run test:auth-browser`         |
+| Appearance in both modes     | `npm run export:auth-test`, then `python3 -m http.server 8132 --bind 127.0.0.1 --directory dist-auth` in another terminal                                                      | `node scripts/appearance-smoke.cjs` |
+| Shared local demo            | Start `betweenus-api` with `npm run dev:demo`; set `EXPO_PUBLIC_API_URL=http://localhost:3001`; run `npm run export:demo`, then `python3 -m http.server 8081 --directory dist` | `npm run test:smoke`                |
 
 Browser smoke scripts require Chromium at `/usr/bin/chromium`, or an appropriate executable supplied through `CHROMIUM_PATH`. Auth traffic is mocked and offline tests block external requests. The shared demo creates ephemeral API records; do not point it at a production service. Build-time environment values must match each test's documented configuration.
+
+Appearance screenshots default to `/tmp/betweenus-appearance`. Use `APPEARANCE_SCREENSHOTS` or `APPEARANCE_URL` to override the output folder or local test URL. Native launch screens follow device appearance before JavaScript can restore an app-level preference.
 
 For mobile UI, verify safe areas, small-screen layout, keyboard/scroll/back handling, touch targets, labels/contrast and relevant text-size behavior. Record the actual iOS/Android device or simulator and OS used. If only browser testing was possible, state the remaining device check in the PR. Keep domain/storage tests focused on invariants and failure recovery rather than rendering details.
