@@ -55,10 +55,11 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   };
   const button = (name) => page.getByRole("button", { name, exact: true });
   await page.goto(offlineURL);
-  await page
-    .getByLabel("Offline receivable", { exact: true })
-    .filter({ hasText: "AED 100.00" })
-    .waitFor();
+  await expect(page.getByLabel("Offline receivable")).toHaveText("—");
+  await expect(
+    page.getByText("Incomplete total · Rate needed for AED"),
+  ).toBeVisible();
+  await expect(page.getByText("AED 100.00", { exact: true })).toBeVisible();
   assert.equal(
     await page.evaluate(
       () =>
