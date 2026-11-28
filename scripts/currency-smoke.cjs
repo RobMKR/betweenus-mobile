@@ -229,7 +229,7 @@ async function account(browser) {
   page.on("pageerror", (error) => errors.push(error.message));
   let settings = { mainCurrency: "USD", rates: [reference] };
   let failSave = false,
-    failRead = false;
+    readFailure = 404;
   const debt = {
     id: "existing-aed",
     lenderId: owner,
@@ -314,7 +314,8 @@ async function account(browser) {
             if (failSave)
               return json({ error: "Temporary settings failure" }, 503);
             settings = route.request().postDataJSON();
-          } else if (failRead) return json({ error: "Unavailable" }, 503);
+          } else if (readFailure)
+            return json({ error: "Unavailable" }, readFailure);
           return json(settings);
         case "/v1/debts":
           if (method === "POST") {
@@ -348,6 +349,18 @@ async function account(browser) {
 
   const { button, field, tab, select, screenshot } = controls(page);
   await page.goto(origin);
+  await expect(
+    page.getByText(
+      "Account currency settings unavailable. Showing USD until you reconnect and reload.",
+    ),
+  ).toBeVisible();
+  await tab("Settings");
+  await expect(button("Main currency, USD US Dollar")).toBeDisabled();
+  assert.deepEqual(settings, { mainCurrency: "USD", rates: [reference] });
+  readFailure = 0;
+  await button("Reload currency settings").click();
+  await expect(button("Main currency, USD US Dollar")).toBeEnabled();
+  await tab("Home");
   await expect(page.getByText("≈ USD 100.00")).toBeVisible();
   await expect(page.getByLabel("Private vault receivable")).toHaveText(
     "Owed to you · USD 100.00",
@@ -386,7 +399,7 @@ async function account(browser) {
   await expect(page.getByText("Vault currency · BHD")).toBeVisible();
   assert.equal(vault.currency, "BHD");
 
-  failRead = true;
+  readFailure = 503;
   await page.reload();
   await expect(
     page.getByText(

@@ -372,6 +372,20 @@ const money = (value) =>
   await tab("Home");
   const privateBalance = (await api("/v1/vault-balances")).balances[0],
     confirmed = (await api("/v1/balances")).balances[0];
+  await expect(page.getByLabel("Private vault receivable")).toHaveText(
+    "Owed to you · —",
+  );
+  await expect(
+    page.getByText(`Owed to you · ${money(privateBalance.receivableMinor)}`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await tab("Settings");
+  await b("Main currency, USD US Dollar").click();
+  await field("Search currencies").fill("AED");
+  await b("AED · UAE Dirham").click();
+  await expect(b("Main currency, AED UAE Dirham")).toBeEnabled();
+  await tab("Home");
   await page
     .getByLabel("Private vault receivable", { exact: true })
     .filter({ hasText: money(privateBalance.receivableMinor) })
