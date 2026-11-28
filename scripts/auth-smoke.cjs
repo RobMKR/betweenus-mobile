@@ -47,6 +47,7 @@ const session = (email) => ({
   let otpRequests = 0,
     refreshRequests = 0;
   let heldRoute = null;
+  let heldCurrency = null;
   let holdDebts = false;
   let failLogout = false;
   let accepted = false,
@@ -126,6 +127,13 @@ const session = (email) => ({
       );
       disputed = true;
       return json({ debt: pending("dispute") });
+    }
+    if (url.endsWith("/currency-settings")) {
+      if (holdDebts && alice) {
+        heldCurrency = route;
+        return;
+      }
+      return json({ mainCurrency: alice ? "AED" : "JPY", rates: [] });
     }
     if (url.endsWith("/people")) return json({ people: [] });
     if (url.endsWith("/vaults")) return json({ vaults: [] });
@@ -300,7 +308,9 @@ const session = (email) => ({
   holdDebts = true;
   await page.reload();
 
-  await expect.poll(() => heldRoute !== null).toBe(true);
+  await expect
+    .poll(() => heldRoute !== null && heldCurrency !== null)
+    .toBe(true);
 
   // /me remains gated by the held aggregate request, but sign-out stays available.
   failLogout = true;
@@ -331,6 +341,14 @@ const session = (email) => ({
   await page.getByText("Verify & sign in", { exact: true }).click();
   await page.getByRole("tab", { name: "Settings", exact: true }).click();
   await page.getByText("bob@example.com", { exact: true }).waitFor();
+  await expect(button("Main currency, JPY Yen")).toBeVisible();
+  await heldCurrency.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ mainCurrency: "RUB", rates: [] }),
+  });
+  await expect(button("Main currency, JPY Yen")).toBeVisible();
+  await expect(button(/^Main currency, RUB/)).toHaveCount(0);
   await page.screenshot({
     path: "/tmp/betweenus-tabs-account-bob.png",
     fullPage: false,

@@ -155,7 +155,7 @@ const event = {
     JSON.parse(localStorage.getItem("betweenus.offline-ledger.v1")),
   );
   assert.deepEqual(disk.vaults.find((v) => v.id === "old-vault").events, [
-    event,
+    { ...event, currency: "AED" },
   ]);
   assert.equal(disk.people.length, 3);
   assert.equal(
@@ -232,6 +232,8 @@ const event = {
           ? { id: otherOwner, email: "other@example.com" }
           : { id: owner, email: "owner@example.com" },
       );
+    if (path.endsWith("/currency-settings"))
+      return json({ mainCurrency: "USD", rates: [] });
     if (path.endsWith("/debts")) return json({ debts: [] });
     if (path.endsWith("/vault-balances")) return json({ balances: [] });
     if (path.endsWith("/events")) return json({ events: [] });
@@ -243,6 +245,7 @@ const event = {
     if (path === "/v1/vaults" && req.method() === "POST") {
       const input = req.postDataJSON();
       assert.deepEqual(Object.keys(input).sort(), [
+        "currency",
         "kind",
         "memberIds",
         "title",

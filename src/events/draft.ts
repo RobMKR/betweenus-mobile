@@ -1,3 +1,11 @@
+import {
+  amountToMinor,
+  exponent,
+  LEGACY_CURRENCY,
+  MAX_MINOR,
+  amountInput,
+  type Currency,
+} from "../currency/model";
 import { localCalendarDate } from "../offline/eventDate";
 import type { SavedPerson } from "../people/model";
 
@@ -17,7 +25,7 @@ export type EventSubmission = {
   title: string;
   date: string;
   totalMinor: number;
-  currency: "AED";
+  currency: Currency;
   participantIds: string[];
   payerId: string;
   splitMode: "equal" | "manual";
@@ -33,8 +41,6 @@ export type AllocationPreview = {
   errors: string[];
   valid: boolean;
 };
-
-const MAX_MINOR = 1_000_000_000;
 
 export function newEventDraft(now = new Date()): EventDraft {
   return {
@@ -75,29 +81,17 @@ export function draftParticipantIds(
   return ids;
 }
 
-/** Parse decimal currency without floating-point rounding or precision truncation. */
-function currencyMinor(value: string, allowZero: boolean): number | null {
-  if (typeof value !== "string" || !/^\d{1,9}(\.\d{1,2})?$/.test(value.trim()))
-    return null;
-  const [whole, fraction = ""] = value.trim().split(".");
-  const minor = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  return Number.isSafeInteger(minor) &&
-    minor <= MAX_MINOR &&
-    (allowZero ? minor >= 0 : minor > 0)
-    ? minor
-    : null;
-}
-
 /** Money-only preview; title/date/payer validation belongs to final submission. */
 export function previewAllocations(
   draft: EventDraft,
   people: SavedPerson[],
+  currency: Currency = LEGACY_CURRENCY,
 ): AllocationPreview {
   const errors: string[] = [];
-  const totalMinor = currencyMinor(draft.amount, false);
+  const totalMinor = amountToMinor(draft.amount, currency);
   if (totalMinor === null)
     errors.push(
-      "Enter a positive total up to AED 10,000,000 with at most two decimal places.",
+      `Enter a positive total up to ${currency} ${amountInput(MAX_MINOR, currency)}, with ${exponent(currency) ? `at most ${exponent(currency)} decimal places` : "no decimal places"}.`,
     );
   let participantIds: string[] = [];
   try {
@@ -125,7 +119,7 @@ export function previewAllocations(
       )
         ? draft.manualAmounts[participantId]
         : "";
-      const shareMinor = currencyMinor(input, true);
+      const shareMinor = amountToMinor(input, currency, true);
       if (shareMinor === null) {
         const name =
           participantId === "self"
@@ -133,7 +127,7 @@ export function previewAllocations(
             : people.find((person) => person.id === participantId)?.name ||
               "Participant";
         errors.push(
-          `${name}: enter a nonnegative share with at most two decimal places (zero is allowed).`,
+          `${name}: enter a nonnegative share with ${exponent(currency) ? `at most ${exponent(currency)} decimal places` : "no decimal places"} (zero is allowed).`,
         );
       } else allocations.push({ participantId, shareMinor });
     }
@@ -164,6 +158,7 @@ export function previewAllocations(
 export function buildEventSubmission(
   draft: EventDraft,
   people: SavedPerson[],
+  currency: Currency = LEGACY_CURRENCY,
 ): EventSubmission {
   const title = draft.title.trim();
   // The guided UI deliberately uses the same 100-character limit as People/vaults.
@@ -177,7 +172,7 @@ export function buildEventSubmission(
       draft.date
   )
     throw new Error("Use a valid date in YYYY-MM-DD format.");
-  const preview = previewAllocations(draft, people);
+  const preview = previewAllocations(draft, people, currency);
   if (!preview.valid || preview.totalMinor === null)
     throw new Error(preview.errors.join(" "));
   if (
@@ -192,7 +187,7 @@ export function buildEventSubmission(
     title,
     date: draft.date,
     totalMinor: preview.totalMinor,
-    currency: "AED",
+    currency,
     participantIds: preview.participantIds,
     payerId: draft.payerId,
     splitMode: draft.splitMode,

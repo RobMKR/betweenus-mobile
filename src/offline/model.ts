@@ -1,6 +1,17 @@
 import { validateMemberIds } from "../vaults/roster";
 import { validateSavedPerson, type SavedPerson } from "../people/model";
-/** Device-only ledger. Every amount is an integer AED minor unit. */
+import {
+  defaultSettings,
+  isCurrency,
+  LEGACY_CURRENCY,
+  MAX_MINOR,
+  validateSettings,
+  type Currency,
+  type CurrencySettings,
+} from "../currency/model";
+export { MAX_MINOR } from "../currency/model";
+
+/** Device-only ledger. Currency is explicit in version 4; older amounts are AED. */
 export type Payment = {
   id: string;
   amountMinor: number;
@@ -16,6 +27,7 @@ export type LocalRecord = {
   date: string;
   note: string;
   payments: Payment[];
+  currency?: Currency;
   personId?: string;
 };
 export type Event = {
@@ -23,6 +35,7 @@ export type Event = {
   title: string;
   date: string;
   totalMinor: number;
+  currency?: Currency;
   payerId: string;
   participants: Person[];
   payments: Record<string, Payment[]>;
@@ -35,22 +48,24 @@ export type Vault = {
   title: string;
   kind: "temporary" | "permanent";
   archived: boolean;
+  currency?: Currency;
   events: Event[];
   memberIds?: string[];
 };
 export type Ledger = {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
+  currencySettings?: CurrencySettings;
   records: LocalRecord[];
   vaults: Vault[];
   people?: SavedPerson[];
 };
 export const emptyLedger = (): Ledger => ({
-  version: 3,
+  version: 4,
+  currencySettings: defaultSettings(),
   people: [],
   records: [],
   vaults: [],
 });
-export const MAX_MINOR = 1_000_000_000;
 export function id() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 }
@@ -71,7 +86,7 @@ export function validDate(value: string): string {
 }
 export function validMinor(value: number) {
   if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_MINOR)
-    throw new Error("Enter a positive amount up to AED 10,000,000.");
+    throw new Error("Enter a positive amount up to 1,000,000,000 minor units.");
   return value;
 }
 export function historyFor(event: Event, personId: string): Payment[] {
@@ -137,7 +152,7 @@ export function participants(names: string[], selfIndex: number): Person[] {
     isSelf: index === selfIndex,
   }));
 }
-// Remainder cents go to participants in saved order; the payer keeps their own share.
+// Remainder minor units go to participants in saved order; the payer keeps their own share.
 export function split(
   totalMinor: number,
   people: Person[],
@@ -307,7 +322,7 @@ export function validateLedger(value: unknown): Ledger {
   const data = value as Ledger;
   if (
     !data ||
-    ![1, 2, 3].includes(data.version) ||
+    ![1, 2, 3, 4].includes(data.version) ||
     !Array.isArray(data.records) ||
     !Array.isArray(data.vaults)
   )
@@ -316,6 +331,17 @@ export function validateLedger(value: unknown): Ledger {
     throw new Error("Unsupported legacy People data.");
   if (data.version >= 2 && !Array.isArray(data.people))
     throw new Error("Invalid saved People data.");
+  if (data.version === 4) validateSettings(data.currencySettings);
+
+  function validateCurrency(currency: Currency | undefined) {
+    if (
+      data.version === 4
+        ? !isCurrency(currency)
+        : currency !== undefined && currency !== LEGACY_CURRENCY
+    )
+      throw new Error("Invalid saved currency.");
+  }
+
   const personIds = new Set<string>();
   for (const person of data.people || []) {
     validateSavedPerson(person);
@@ -330,6 +356,7 @@ export function validateLedger(value: unknown): Ledger {
   }
   for (const r of data.records) {
     unique(r.id);
+    validateCurrency(r.currency);
     text(r.name, "Name", 100);
     if (
       r.personId !== undefined &&
@@ -348,6 +375,7 @@ export function validateLedger(value: unknown): Ledger {
   }
   for (const v of data.vaults) {
     unique(v.id);
+    validateCurrency(v.currency);
     text(v.title, "Vault title");
     if (
       !["temporary", "permanent"].includes(v.kind) ||
@@ -361,6 +389,9 @@ export function validateLedger(value: unknown): Ledger {
     }
     for (const e of v.events) {
       unique(e.id);
+      validateCurrency(e.currency);
+      if ((e.currency ?? LEGACY_CURRENCY) !== (v.currency ?? LEGACY_CURRENCY))
+        throw new Error("Event currency must match the vault currency.");
       text(e.title, "Event title");
       validDate(e.date);
       validMinor(e.totalMinor);
@@ -377,7 +408,7 @@ export function validateLedger(value: unknown): Ledger {
         throw new Error("Invalid participants.");
       if (snapshot) {
         if (
-          data.version !== 3 ||
+          data.version < 3 ||
           !["equal", "manual"].includes(e.splitMode!) ||
           !e.shares ||
           typeof e.shares !== "object" ||
@@ -449,10 +480,64 @@ export function validateLedger(value: unknown): Ledger {
   return data;
 }
 
-/** Read-only upgrade; original v1/v2 disk data is retained until a successful write. */
+/** Preserve the original disk data until the next successful commit. */
 export function migrateLedger(value: unknown): Ledger {
   const data = validateLedger(value);
-  return data.version < 3
-    ? { ...data, version: 3, people: data.people || [] }
-    : data;
+  if (data.version === 4) return data;
+  return {
+    ...data,
+    version: 4,
+    currencySettings: defaultSettings(),
+    people: data.people ?? [],
+    records: data.records.map((record) => ({
+      ...record,
+      currency: LEGACY_CURRENCY,
+    })),
+    vaults: data.vaults.map((vault) => ({
+      ...vault,
+      currency: LEGACY_CURRENCY,
+      events: vault.events.map((event) => ({
+        ...event,
+        currency: LEGACY_CURRENCY,
+      })),
+    })),
+  };
+}
+
+export function setLocalVaultCurrency(
+  ledger: Ledger,
+  vaultId: string,
+  currency: Currency,
+): Ledger {
+  const vault = ledger.vaults.find((item) => item.id === vaultId);
+  if (!vault) throw new Error("Vault not found.");
+  if ((vault.currency ?? LEGACY_CURRENCY) === currency) return ledger;
+  if (vault.events.length)
+    throw new Error("Currency is locked once a vault has an event.");
+  return {
+    ...ledger,
+    vaults: ledger.vaults.map((item) =>
+      item.id === vault.id ? { ...item, currency } : item,
+    ),
+  };
+}
+
+export function recordBalanceRows(records: LocalRecord[]) {
+  return records.map((record) => {
+    const due = remaining(record.amountMinor, record.payments);
+    return {
+      currency: record.currency ?? LEGACY_CURRENCY,
+      receivableMinor: record.direction === "lent" ? due : 0,
+      payableMinor: record.direction === "borrowed" ? due : 0,
+    };
+  });
+}
+
+export function vaultBalanceRows(vaults: Vault[]) {
+  return vaults.flatMap((vault) =>
+    vault.events.map((event) => ({
+      currency: vault.currency ?? LEGACY_CURRENCY,
+      ...eventBalances(event),
+    })),
+  );
 }

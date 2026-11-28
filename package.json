@@ -14,7 +14,7 @@
     "export:demo": "node scripts/export.cjs --demo",
     "test:smoke": "node scripts/smoke.cjs",
     "format": "prettier --write app src scripts *.json .github/workflows/ci.yml",
-    "test": "node --import tsx test/auth.test.ts && node --import tsx test/offline.test.ts && node --import tsx test/navigation.test.ts && node --import tsx test/event-date.test.ts && node --import tsx test/phone-contacts.test.ts && node --import tsx test/people.test.ts && node --import tsx test/roster.test.ts && node --import tsx test/event-draft.test.ts && node --import tsx test/account-event-intents.test.ts && node --import tsx test/event-local.test.ts && node --import tsx test/appearance.test.ts",
+    "test": "node --import tsx test/auth.test.ts && node --import tsx test/offline.test.ts && node --import tsx test/navigation.test.ts && node --import tsx test/event-date.test.ts && node --import tsx test/phone-contacts.test.ts && node --import tsx test/people.test.ts && node --import tsx test/roster.test.ts && node --import tsx test/event-draft.test.ts && node --import tsx test/account-event-intents.test.ts && node --import tsx test/event-local.test.ts && node --import tsx test/appearance.test.ts && node --import tsx test/currency.test.ts",
     "test:auth-browser": "node scripts/auth-smoke.cjs",
     "export:auth-test": "node scripts/export-auth-test.cjs",
     "test:offline-browser": "node scripts/offline-smoke.cjs",

@@ -47,10 +47,10 @@ const old: Ledger = {
 test("v1 upgrade preserves old arrays, dates, archive and names without invented people or links", () => {
   const before = JSON.stringify(old),
     next = migrateLedger(old);
-  assert.equal(next.version, 3);
+  assert.equal(next.version, 4);
   assert.deepEqual(next.people, []);
-  assert.equal(next.records, old.records);
-  assert.equal(next.vaults, old.vaults);
+  assert.deepEqual(next.records, [{ ...old.records[0], currency: "AED" }]);
+  assert.deepEqual(next.vaults, [{ ...old.vaults[0], currency: "AED" }]);
   assert.equal(next.records[0].personId, undefined);
   assert.equal(JSON.stringify(old), before);
   assert.equal(migrateLedger(next), next);
@@ -72,7 +72,6 @@ test("migration is read-only until successful write; failed person save leaves v
   await assert.rejects(
     store.commit((current) => ({
       ...current,
-      version: 3,
       people: [person("one")],
     })),
     /Device full/,
@@ -81,12 +80,13 @@ test("migration is read-only until successful write; failed person save leaves v
   fail = false;
   const saved = await store.commit((current) => ({
     ...current,
-    version: 3,
     people: [person("one")],
   }));
   assert.equal(saved.people?.length, 1);
-  assert.equal(JSON.parse(disk).version, 3);
-  assert.deepEqual(JSON.parse(disk).records, old.records);
+  assert.equal(JSON.parse(disk).version, 4);
+  assert.deepEqual(JSON.parse(disk).records, [
+    { ...old.records[0], currency: "AED" },
+  ]);
 });
 test("same-name saved IDs stay separate and only explicit personal record links contribute", () => {
   const base = emptyLedger();
@@ -94,8 +94,14 @@ test("same-name saved IDs stay separate and only explicit personal record links 
     ...base,
     people: [person("one"), person("two")],
     records: [
-      ...old.records,
-      { ...old.records[0], id: "linked", personId: "two", amountMinor: 1234 },
+      { ...old.records[0], currency: "AED" },
+      {
+        ...old.records[0],
+        currency: "AED",
+        id: "linked",
+        personId: "two",
+        amountMinor: 1234,
+      },
     ],
   };
   validateLedger(ledger);
@@ -106,7 +112,7 @@ test("same-name saved IDs stay separate and only explicit personal record links 
     () =>
       validateLedger({
         ...ledger,
-        records: [{ ...old.records[0], personId: "missing" }],
+        records: [{ ...old.records[0], currency: "AED", personId: "missing" }],
       }),
     /link/,
   );

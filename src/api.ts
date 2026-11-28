@@ -1,3 +1,5 @@
+import type { Currency } from "./currency/model";
+export { amountToMinor, money } from "./currency/model";
 export type DebtStatus = "pending" | "accepted" | "disputed";
 export type Debt = {
   id: string;
@@ -6,7 +8,7 @@ export type Debt = {
   lenderEmail: string;
   borrowerEmail: string;
   amountMinor: number;
-  currency: string;
+  currency: Currency;
   description: string;
   status: DebtStatus;
   createdAt: string;
@@ -20,7 +22,7 @@ export type Debt = {
   }>;
 };
 export type Balance = {
-  currency: string;
+  currency: Currency;
   receivableMinor: number;
   payableMinor: number;
   netMinor: number;
@@ -42,9 +44,10 @@ export async function request<T>(
   path: string,
   token: string,
   body?: unknown,
+  method = body === undefined ? "GET" : "POST",
 ): Promise<T> {
   const response = await fetch(`${API_URL}/v1${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -63,15 +66,4 @@ export async function request<T>(
       typeof result.error?.code === "string" ? result.error.code : undefined,
     );
   return result as T;
-}
-export function amountToMinor(input: string): number | null {
-  if (!/^\d{1,9}(\.\d{1,2})?$/.test(input.trim())) return null;
-  const [whole, cents = ""] = input.trim().split(".");
-  const minor = Number(whole) * 100 + Number(cents.padEnd(2, "0"));
-  return Number.isSafeInteger(minor) && minor > 0 && minor <= 1_000_000_000
-    ? minor
-    : null;
-}
-export function money(minor: number, currency = "AED") {
-  return `${currency} ${(minor / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

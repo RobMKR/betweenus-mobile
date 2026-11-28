@@ -160,13 +160,18 @@ test("v1/v2 read-only migration preserves legacy event bytes, balances and archi
   const before = JSON.stringify(old.vaults),
     balance = totals(old);
   const migrated = migrateLedger(old);
-  assert.equal(migrated.version, 3);
-  assert.equal(JSON.stringify(migrated.vaults), before);
+  assert.equal(migrated.version, 4);
+  assert.equal(JSON.stringify(old.vaults), before);
+  assert.deepEqual(migrated.vaults[0], {
+    ...old.vaults[0],
+    currency: "AED",
+    events: [{ ...legacy, currency: "AED" }],
+  });
   assert.deepEqual(totals(migrated), balance);
   assert.equal(balance.payableMinor, 51);
   assert.equal(migrated.vaults[0].memberIds, undefined);
   const v1 = migrateLedger({ ...old, version: 1, people: undefined });
-  assert.equal(v1.version, 3);
+  assert.equal(v1.version, 4);
   assert.deepEqual(v1.people, []);
   let disk = JSON.stringify(old),
     fail = true;
@@ -189,6 +194,7 @@ test("v1/v2 read-only migration preserves legacy event bytes, balances and archi
           title: "New",
           kind: "temporary",
           archived: false,
+          currency: "AED",
           events: [createLocalEvent(input(), people)],
         },
       ],
@@ -197,8 +203,8 @@ test("v1/v2 read-only migration preserves legacy event bytes, balances and archi
   assert.equal(JSON.parse(disk).version, 2);
   fail = false;
   await store.commit((current) => ({ ...current, records: [] }));
-  assert.equal(JSON.parse(disk).version, 3);
-  assert.equal(JSON.stringify(JSON.parse(disk).vaults), before);
+  assert.equal(JSON.parse(disk).version, 4);
+  assert.deepEqual(JSON.parse(disk).vaults, migrated.vaults);
 });
 
 test("full-only events settle the current remaining share and preserve earlier payments and undo history", async () => {

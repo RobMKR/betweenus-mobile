@@ -93,6 +93,7 @@ async function main() {
           "/v1/me": { id: session.user.id, email: session.user.email },
           "/v1/people": { people: [] },
           "/v1/debts": { debts: [] },
+          "/v1/currency-settings": { mainCurrency: "USD", rates: [] },
           "/v1/balances": { balances: [] },
           "/v1/vault-balances": { balances: [] },
           "/v1/vaults": { vaults: [] },

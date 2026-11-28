@@ -1,3 +1,4 @@
+import { amountInput, LEGACY_CURRENCY, type Currency } from "../currency/model";
 import React, { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { randomUUID } from "expo-crypto";
@@ -22,7 +23,13 @@ import {
 export type AccountEventsProps = {
   token: string;
   ownerId: string;
-  vault: { id: string; title: string; archived: boolean; memberIds: string[] };
+  vault: {
+    id: string;
+    title: string;
+    archived: boolean;
+    memberIds: string[];
+    currency?: Currency;
+  };
   people: SavedPerson[];
   onPersonCreated: (person: SavedPerson) => void;
   selectedEventId: string | null;
@@ -37,6 +44,7 @@ const ledgerRejections: Readonly<Record<string, number>> = {
   VALIDATION_ERROR: 400,
   NOT_FOUND: 404,
   VAULT_ARCHIVED: 409,
+  VAULT_CURRENCY_MISMATCH: 409,
   PAYER_PAYMENT: 409,
   FULL_PAYMENT_REQUIRED: 409,
   OVERPAYMENT: 409,
@@ -45,6 +53,7 @@ const ledgerRejections: Readonly<Record<string, number>> = {
 export default function AccountEvents(props: AccountEventsProps) {
   const { s } = useUi();
   const { vault, people, selectedEventId } = props;
+  const vaultCurrency = vault.currency ?? LEGACY_CURRENCY;
   const latest = useRef(props);
   latest.current = props;
   const active = useRef(false),
@@ -317,7 +326,11 @@ export default function AccountEvents(props: AccountEventsProps) {
         await submitMoney(prior);
       return;
     }
-    await recordPayment(event, paying.participantId, amountToMinor(amount));
+    await recordPayment(
+      event,
+      paying.participantId,
+      amountToMinor(amount, event.currency),
+    );
   }
   async function recordPayment(
     target: AccountEvent,
@@ -349,6 +362,7 @@ export default function AccountEvents(props: AccountEventsProps) {
       kind: "payment",
       eventId: target.id,
       eventTitle: target.title,
+      currency: target.currency,
       participantName: participant.isSelf ? "you" : participant.name,
       body: { participantId, amountMinor },
       clientRequestId: randomUUID(),
@@ -410,6 +424,7 @@ export default function AccountEvents(props: AccountEventsProps) {
     }
   }
   const visibleEvent = event?.id === selectedEventId ? event : null;
+  const paymentCurrency = visibleEvent?.currency ?? vaultCurrency;
   return (
     <View style={{ gap: 16 }}>
       {pending && !wizard && !paying && (
@@ -421,8 +436,8 @@ export default function AccountEvents(props: AccountEventsProps) {
           </Text>
           <Text style={s.body}>
             {pending.kind === "event"
-              ? `${pending.body.title} · ${money(pending.body.totalMinor)}`
-              : `${pending.eventTitle} · ${pending.participantName} · ${money(pending.body.amountMinor)}`}
+              ? `${pending.body.title} · ${money(pending.body.totalMinor, pending.body.currency)}`
+              : `${pending.eventTitle} · ${pending.participantName} · ${money(pending.body.amountMinor, pending.currency ?? vaultCurrency)}`}
           </Text>
           <Text style={s.small}>
             Retry the original request to confirm it or finish saving it. Then
@@ -455,7 +470,9 @@ export default function AccountEvents(props: AccountEventsProps) {
                   ? "Manual shares"
                   : "Equal shares"}
               </Text>
-              <Text style={s.amount}>{money(visibleEvent.totalMinor)}</Text>
+              <Text style={s.amount}>
+                {money(visibleEvent.totalMinor, visibleEvent.currency)}
+              </Text>
               <Text style={s.small}>
                 Paid by{" "}
                 {visibleEvent.payerId === "self"
@@ -468,8 +485,16 @@ export default function AccountEvents(props: AccountEventsProps) {
               <View style={s.card}>
                 <Text style={s.section}>Your private event balance</Text>
                 <Text style={s.body}>
-                  Receivable {money(visibleEvent.balance.receivableMinor)} ·
-                  Payable {money(visibleEvent.balance.payableMinor)}
+                  Receivable{" "}
+                  {money(
+                    visibleEvent.balance.receivableMinor,
+                    visibleEvent.currency,
+                  )}{" "}
+                  · Payable{" "}
+                  {money(
+                    visibleEvent.balance.payableMinor,
+                    visibleEvent.currency,
+                  )}
                 </Text>
                 <Text style={s.small}>
                   Separate from accepted shared debts. Recording a payment
@@ -491,8 +516,9 @@ export default function AccountEvents(props: AccountEventsProps) {
                   </Text>
                   <Text style={s.small}>
                     Participant {index + 1} · Share{" "}
-                    {money(participant.shareMinor)} · Remaining{" "}
-                    {money(participant.remainingMinor)}
+                    {money(participant.shareMinor, visibleEvent.currency)} ·
+                    Remaining{" "}
+                    {money(participant.remainingMinor, visibleEvent.currency)}
                     {participant.participantId === visibleEvent.payerId
                       ? " · Payer's own share"
                       : participant.remainingMinor === 0
@@ -554,7 +580,7 @@ export default function AccountEvents(props: AccountEventsProps) {
                         : participant?.name || "Participant"}
                     </Text>
                     <Text style={s.body}>
-                      {money(payment.amountMinor)} ·{" "}
+                      {money(payment.amountMinor, visibleEvent.currency)} ·{" "}
                       {new Date(payment.createdAt).toLocaleString()}
                     </Text>
                     {!!payment.reversesId && (
@@ -603,11 +629,11 @@ export default function AccountEvents(props: AccountEventsProps) {
             <View key={item.id} style={s.card}>
               <Text style={s.cardTitle}>{item.title}</Text>
               <Text style={s.body}>
-                {item.date} · {money(item.totalMinor)}
+                {item.date} · {money(item.totalMinor, item.currency)}
               </Text>
               <Text style={s.small}>
-                Receivable {money(item.balance.receivableMinor)} · Payable{" "}
-                {money(item.balance.payableMinor)}
+                Receivable {money(item.balance.receivableMinor, item.currency)}{" "}
+                · Payable {money(item.balance.payableMinor, item.currency)}
               </Text>
               <Button
                 title={`Open event ${item.title}`}
@@ -653,6 +679,7 @@ export default function AccountEvents(props: AccountEventsProps) {
       <EventWizard
         visible={wizard}
         vaultTitle={vault.title}
+        currency={vaultCurrency}
         rosterIds={vault.memberIds}
         people={allPeople}
         onClose={() => {
@@ -673,14 +700,14 @@ export default function AccountEvents(props: AccountEventsProps) {
       >
         <Text style={s.body}>
           {paying?.isSelf ? "You" : paying?.name} · Remaining{" "}
-          {money(paying?.remainingMinor ?? 0)}
+          {money(paying?.remainingMinor ?? 0, paymentCurrency)}
         </Text>
         <Text style={s.small}>
           Record a payment already made. This does not transfer money or notify
           anyone.
         </Text>
         <Field
-          label="Payment amount · AED"
+          label={`Payment amount · ${paymentCurrency}`}
           value={amount}
           onChangeText={setAmount}
           keyboardType="decimal-pad"
@@ -691,7 +718,7 @@ export default function AccountEvents(props: AccountEventsProps) {
           secondary
           disabled={busy || !!pending}
           onPress={() =>
-            setAmount(((paying?.remainingMinor ?? 0) / 100).toFixed(2))
+            setAmount(amountInput(paying?.remainingMinor ?? 0, paymentCurrency))
           }
         />
         {!!paymentError && (
