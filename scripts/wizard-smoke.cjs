@@ -229,6 +229,10 @@ const url = process.env.WIZARD_OFFLINE_URL || "http://localhost:8099";
   await page.getByText("Weekly team", { exact: true }).click();
   await page.getByText("Event expenses · 3", { exact: true }).waitFor();
   await b("Archive vault").click();
+  await tab("Settings");
+  await b("Main currency, USD US Dollar").click();
+  await field("Search currencies").fill("AED");
+  await b("AED · UAE Dirham").click();
   await tab("Home");
   await page
     .getByLabel("Offline receivable", { exact: true })
@@ -237,8 +241,8 @@ const url = process.env.WIZARD_OFFLINE_URL || "http://localhost:8099";
   const disk = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("betweenus.offline-ledger.v1")),
   );
-  assert.equal(disk.version, 3);
-  assert.deepEqual(disk.vaults[0].events[0], old);
+  assert.equal(disk.version, 4);
+  assert.deepEqual(disk.vaults[0].events[0], { ...old, currency: "AED" });
   assert.equal(disk.vaults[0].events[1].splitMode, "manual");
   assert.equal(disk.vaults[0].events[1].partialPayments, true);
   assert.equal(disk.vaults[0].events[2].partialPayments, false);
@@ -264,7 +268,7 @@ const url = process.env.WIZARD_OFFLINE_URL || "http://localhost:8099";
   assert.deepEqual(external, []);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS guided offline wizard: Back/Next retained, manual reconciliation, include-self/payer validation, selected custom person, self-paid outside split, v2→v3 durable migration/failure retry, immutable legacy event, partial/full-only payment, double tap, undo/reload/archive,320/430,no external requests.",
+    "PASS guided offline wizard: Back/Next retained, manual reconciliation, include-self/payer validation, selected custom person, self-paid outside split, v2→v4 durable migration/failure retry, immutable legacy event, partial/full-only payment, double tap, undo/reload/archive,320/430,no external requests.",
   );
   await browser.close();
 })().catch((e) => {

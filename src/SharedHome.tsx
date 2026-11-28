@@ -1,7 +1,16 @@
+import CurrencySettings, { CurrencyField } from "./currency/CurrencySettings";
+import {
+  AmountEstimate,
+  BalanceTotals,
+  incompleteLabel,
+  totalAmount,
+} from "./currency/Amounts";
+import { createValuation, type Currency } from "./currency/model";
+import { useAccountCurrency } from "./currency/useAccountCurrency";
 import { palettes, type ThemeColors } from "./appearance/colors";
 import { useAppearance } from "./appearance/AppearanceProvider";
 import AppearanceSettings from "./appearance/AppearanceSettings";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -82,6 +91,11 @@ function DebtHome({
   const requestIdentity = useRef(token);
   requestIdentity.current = token;
   const owner = DEMO ? `demo-${persona}` : ownerIdentity;
+  const accountCurrency = useAccountCurrency(owner, token);
+  const valuation = useMemo(
+    () => createValuation(accountCurrency.settings),
+    [accountCurrency.settings],
+  );
   const peopleOwner = useRef(owner);
   peopleOwner.current = owner;
   const [me, setMe] = useState<{ id: string; email: string } | null>(null);
@@ -202,6 +216,7 @@ function DebtHome({
   const listRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
+  const [draftCurrency, setDraftCurrency] = useState<Currency>("USD");
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   async function refresh() {
@@ -248,14 +263,14 @@ function DebtHome({
     void refresh();
   }, [token]);
   async function create() {
-    const minor = amountToMinor(amount);
+    const minor = amountToMinor(amount, draftCurrency);
     if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
       !minor ||
       !note.trim()
     ) {
       setError(
-        "Enter a valid email, a positive amount up to AED 10,000,000 with up to 2 decimals, and a note.",
+        `Enter a valid email, a positive ${draftCurrency} amount with the currency’s allowed precision, and a note.`,
       );
       return;
     }
@@ -270,7 +285,7 @@ function DebtHome({
       await request("/debts", token, {
         borrowerEmail: email.trim().toLowerCase(),
         amountMinor: minor,
-        currency: "AED",
+        currency: draftCurrency,
         description: note.trim(),
       });
       if (!active.current || requestIdentity.current !== operationToken) return;
@@ -318,7 +333,7 @@ function DebtHome({
         setBusy(false);
     }
   }
-  const total = balances.find((b) => b.currency === "AED");
+  const total = valuation.balances(balances);
   const pending = debts.filter((d) => d.status === "pending").length;
   const groups = accountPeople(debts, me?.id);
   const selected = person ? groups.get(person) : null;
@@ -402,6 +417,7 @@ function DebtHome({
     );
   }
   function startCreate(borrowerEmail = "") {
+    setDraftCurrency(valuation.currency);
     setEmail(borrowerEmail);
     setAmount("");
     setNote("");
@@ -470,6 +486,11 @@ function DebtHome({
               {debt.lenderId === me?.id ? "owes you" : "you owe"}
             </Text>
           </View>
+          <AmountEstimate
+            minor={debt.amountMinor}
+            currency={debt.currency}
+            valuation={valuation}
+          />
           <Text style={s.status}>{labels[debt.status]}</Text>
         </Pressable>
       ))
@@ -492,6 +513,11 @@ function DebtHome({
           </Text>
           <Text style={s.balanceSmall}>{debt.description}</Text>
         </View>
+        <AmountEstimate
+          minor={debt.amountMinor}
+          currency={debt.currency}
+          valuation={valuation}
+        />
         <View style={s.card}>
           <Text style={s.label}>Lent by</Text>
           <Text style={s.body}>{debt.lenderEmail}</Text>
@@ -576,6 +602,7 @@ function DebtHome({
                   onRefresh={() => {
                     void refresh();
                     void loadVaultBalances();
+                    void accountCurrency.reload();
                   }}
                 />
               ) : undefined
@@ -600,30 +627,45 @@ function DebtHome({
                 <Text style={s.title}>Your shared overview</Text>
                 <Text style={s.body}>Clear records. Confirmed together.</Text>
                 <View style={s.balanceCard}>
-                  <Text style={s.balanceSmall}>CONFIRMED AED BALANCE</Text>
+                  <Text style={s.balanceSmall}>
+                    CONFIRMED BALANCE · {valuation.currency}
+                  </Text>
                   <Text style={s.balanceAmount}>
-                    {loaded ? money(total?.netMinor ?? 0) : "—"}
+                    {loaded ? totalAmount(total, "netMinor") : "—"}
                   </Text>
                   <Text style={s.balanceSmall}>
-                    {(total?.netMinor ?? 0) < 0
-                      ? "Net amount to pay back"
-                      : "Net amount to receive"}
+                    {total.unknown.netMinor
+                      ? "Net estimate unavailable"
+                      : total.netMinor < 0n
+                        ? "Net amount to pay back"
+                        : "Net amount to receive"}
                   </Text>
                   <View style={s.divider} />
                   <Text style={s.balanceSmall}>Owed to you</Text>
                   <Text style={s.balanceValue}>
-                    {loaded ? money(total?.receivableMinor ?? 0) : "—"}
+                    {loaded ? totalAmount(total, "receivableMinor") : "—"}
                   </Text>
                   <Text style={s.balanceSmall}>You owe</Text>
                   <Text style={s.balanceValue}>
-                    {loaded ? money(total?.payableMinor ?? 0) : "—"}
+                    {loaded ? totalAmount(total, "payableMinor") : "—"}
                   </Text>
                   <Text style={s.balanceSmall}>
-                    Confirmed debts only · no currency conversion
+                    {total.missingCurrencies.length
+                      ? incompleteLabel(total.missingCurrencies)
+                      : "Confirmed debts · Estimated using saved rates"}
                   </Text>
                 </View>
+                {accountCurrency.unavailable && (
+                  <Text style={s.small} accessibilityRole="status">
+                    {accountCurrency.unavailable}
+                  </Text>
+                )}
                 {balances
-                  .filter((b) => b.currency !== "AED")
+                  .filter(
+                    (b) =>
+                      b.currency !== valuation.currency &&
+                      (b.receivableMinor !== 0 || b.payableMinor !== 0),
+                  )
                   .map((balance) => (
                     <View key={balance.currency} style={s.card}>
                       <Text style={s.cardTitle}>
@@ -649,24 +691,31 @@ function DebtHome({
                       Private balances unavailable until loaded.
                     </Text>
                   ) : (
-                    vaultBalances.map((balance) => (
-                      <View key={balance.currency}>
-                        <Text
-                          accessibilityLabel="Private vault receivable"
-                          style={s.body}
-                        >
-                          Owed to you ·{" "}
-                          {money(balance.receivableMinor, balance.currency)}
-                        </Text>
-                        <Text
-                          accessibilityLabel="Private vault payable"
-                          style={s.body}
-                        >
-                          You owe ·{" "}
-                          {money(balance.payableMinor, balance.currency)}
-                        </Text>
-                      </View>
-                    ))
+                    <>
+                      <BalanceTotals
+                        totals={valuation.balances(vaultBalances)}
+                        accessibilityPrefix="Private vault"
+                      />
+                      {vaultBalances
+                        .filter(
+                          (balance) =>
+                            balance.currency !== valuation.currency &&
+                            (balance.receivableMinor !== 0 ||
+                              balance.payableMinor !== 0),
+                        )
+                        .map((balance) => (
+                          <View key={balance.currency}>
+                            <Text style={s.body}>
+                              Owed to you ·{" "}
+                              {money(balance.receivableMinor, balance.currency)}
+                            </Text>
+                            <Text style={s.body}>
+                              You owe ·{" "}
+                              {money(balance.payableMinor, balance.currency)}
+                            </Text>
+                          </View>
+                        ))}
+                    </>
                   )}
                   {!!vaultBalanceError && (
                     <Text accessibilityRole="alert" style={s.error}>
@@ -799,6 +848,14 @@ function DebtHome({
                   {filters()}
                   {selected ? (
                     <>
+                      <View style={s.card}>
+                        <Text style={s.label}>Confirmed balance estimate</Text>
+                        <BalanceTotals
+                          totals={valuation.balances(
+                            confirmedPersonBalances(selected.debts, me?.id),
+                          )}
+                        />
+                      </View>
                       {confirmedPersonBalances(selected.debts, me?.id).map(
                         (balance) => (
                           <View key={balance.currency} style={s.card}>
@@ -886,6 +943,7 @@ function DebtHome({
               <AccountVaults
                 token={token}
                 ownerId={owner}
+                mainCurrency={valuation.currency}
                 people={savedPeople}
                 onPersonCreated={(person) =>
                   setSavedPeople((previous) =>
@@ -905,6 +963,12 @@ function DebtHome({
               <>
                 <Text style={s.title}>Settings</Text>
                 <AppearanceSettings />
+                <CurrencySettings
+                  settings={accountCurrency.settings}
+                  save={accountCurrency.save}
+                  unavailable={accountCurrency.unavailable}
+                  onRetry={() => void accountCurrency.reload()}
+                />
                 <View style={s.card}>
                   <Text style={s.label}>
                     {DEMO ? "Local demo" : "Account mode"}
@@ -1004,16 +1068,22 @@ function DebtHome({
                 placeholder="friend@example.com"
                 style={s.input}
               />
-              <Text style={s.label}>Amount · AED</Text>
+              <CurrencyField
+                label="Debt currency"
+                value={draftCurrency}
+                onChange={setDraftCurrency}
+                disabled={busy}
+              />
+              <Text style={s.label}>Amount · {draftCurrency}</Text>
               <TextInput
                 placeholderTextColor={colors.placeholder}
                 selectionColor={colors.selection}
                 keyboardAppearance={scheme}
-                accessibilityLabel="Amount in AED"
+                accessibilityLabel={`Amount in ${draftCurrency}`}
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="decimal-pad"
-                placeholder="0.00"
+                placeholder="0"
                 style={s.input}
               />
               <Text style={s.label}>What was it for?</Text>

@@ -1,3 +1,5 @@
+import { CurrencyField } from "../currency/CurrencySettings";
+import { LEGACY_CURRENCY, type Currency } from "../currency/model";
 import React, { useEffect, useRef, useState } from "react";
 import { BackHandler, Text, View } from "react-native";
 import AccountEvents from "../events/AccountEvents";
@@ -16,6 +18,7 @@ type Vault = {
   id: string;
   title: string;
   kind: "temporary" | "permanent";
+  currency?: Currency;
   archived: boolean;
   memberIds: string[];
   createdAt: string;
@@ -32,6 +35,7 @@ type VaultDetail = {
       | "created"
       | "member_added"
       | "member_removed"
+      | "currency_changed"
       | "archived"
       | "reactivated";
     personId: string | null;
@@ -43,6 +47,7 @@ type VaultDetail = {
 export default function AccountVaults({
   token,
   ownerId,
+  mainCurrency,
   people,
   onPersonCreated,
   rootRevision = 0,
@@ -52,6 +57,7 @@ export default function AccountVaults({
 }: {
   token: string;
   ownerId: string;
+  mainCurrency: Currency;
   people: SavedPerson[];
   onPersonCreated: (person: SavedPerson) => void;
   rootRevision?: number;
@@ -67,6 +73,8 @@ export default function AccountVaults({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [currency, setCurrency] = useState<Currency>(mainCurrency);
+  const [editingCurrency, setEditingCurrency] = useState(false);
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState(false);
   const [personEditor, setPersonEditor] = useState(false);
@@ -135,6 +143,7 @@ export default function AccountVaults({
     setSelectedEventId(null);
     setCreating(false);
     setManaging(false);
+    setEditingCurrency(false);
     setPersonEditor(false);
     setAddedPeople([]);
     setSelectedIds([]);
@@ -162,6 +171,7 @@ export default function AccountVaults({
     setSelectedEventId(null);
     setCreating(false);
     setManaging(false);
+    setEditingCurrency(false);
     setPersonEditor(false);
     void loadList();
   }, [rootRevision]);
@@ -174,7 +184,8 @@ export default function AccountVaults({
   }
 
   useEffect(() => {
-    if (!detail || creating || managing || personEditor) return;
+    if (!detail || creating || managing || editingCurrency || personEditor)
+      return;
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
@@ -186,7 +197,15 @@ export default function AccountVaults({
       },
     );
     return () => subscription.remove();
-  }, [detail, selectedEventId, creating, managing, personEditor, busy]);
+  }, [
+    detail,
+    selectedEventId,
+    creating,
+    managing,
+    editingCurrency,
+    personEditor,
+    busy,
+  ]);
 
   const previousCreate = useRef(0);
   useEffect(() => {
@@ -226,6 +245,7 @@ export default function AccountVaults({
   function beginCreate() {
     setTitle("");
     setKind("permanent");
+    setCurrency(mainCurrency);
     setSelectedIds([]);
     setDraftError("");
     setCreating(true);
@@ -265,7 +285,7 @@ export default function AccountVaults({
       const result = await request<VaultDetail>(
         "/vaults",
         latest.current.token,
-        { title: title.trim(), kind, memberIds: selectedIds },
+        { title: title.trim(), kind, memberIds: selectedIds, currency },
       );
       if (!current(generation, owner)) return;
       invalidateReads();
@@ -280,6 +300,39 @@ export default function AccountVaults({
         setDraftError(
           `${(e as Error).message} The vault may have been saved. Close this draft and refresh the vault list before retrying to avoid duplicates.`,
         );
+    } finally {
+      if (current(generation, owner)) {
+        saving.current = false;
+        setBusy(false);
+      }
+    }
+  }
+  async function saveCurrency() {
+    if (!detail || saving.current) return;
+    const vaultId = detail.vault.id;
+    const generation = epoch.current;
+    const owner = latest.current.ownerId;
+    saving.current = true;
+    setBusy(true);
+    setDraftError("");
+    try {
+      const result = await request<VaultDetail>(
+        `/vaults/${vaultId}/currency`,
+        latest.current.token,
+        { currency },
+        "PATCH",
+      );
+      if (!current(generation, owner) || selectedVaultId.current !== vaultId)
+        return;
+      invalidateReads();
+      showDetail(result);
+      setVaults((items) =>
+        items.map((item) => (item.id === vaultId ? result.vault : item)),
+      );
+      setEditingCurrency(false);
+      onLedgerChanged?.();
+    } catch (e) {
+      if (current(generation, owner)) setDraftError((e as Error).message);
     } finally {
       if (current(generation, owner)) {
         saving.current = false;
@@ -413,6 +466,21 @@ export default function AccountVaults({
                 {detail.vault.kind.toUpperCase()} VAULT
               </Text>
               <Text style={s.title}>{detail.vault.title}</Text>
+              <Text style={s.label}>
+                Vault currency · {detail.vault.currency ?? LEGACY_CURRENCY}
+              </Text>
+              {detail.vault.eventCount === 0 && !detail.vault.archived && (
+                <Button
+                  title="Change vault currency"
+                  secondary
+                  disabled={busy}
+                  onPress={() => {
+                    setCurrency(detail.vault.currency ?? LEGACY_CURRENCY);
+                    setDraftError("");
+                    setEditingCurrency(true);
+                  }}
+                />
+              )}
               <Text style={s.body}>
                 Your private roster. Adding people grants no account access and
                 sends no invitation.
@@ -482,9 +550,11 @@ export default function AccountVaults({
                         ? "Member added"
                         : entry.action === "member_removed"
                           ? "Member removed"
-                          : entry.action === "archived"
-                            ? "Vault archived"
-                            : "Vault reactivated"}
+                          : entry.action === "currency_changed"
+                            ? "Vault currency changed"
+                            : entry.action === "archived"
+                              ? "Vault archived"
+                              : "Vault reactivated"}
                   </Text>
                   <Text style={s.small}>
                     {new Date(entry.createdAt).toLocaleString()}
@@ -517,7 +587,8 @@ export default function AccountVaults({
               <Text style={s.cardTitle}>{vault.title}</Text>
               <Text style={s.small}>
                 {vault.kind === "permanent" ? "Permanent" : "Temporary"} ·{" "}
-                {vault.memberIds.length} members
+                {vault.currency ?? LEGACY_CURRENCY} · {vault.memberIds.length}{" "}
+                members
                 {vault.archived ? " · Archived" : ""}
               </Text>
               <Button
@@ -560,6 +631,12 @@ export default function AccountVaults({
           maxLength={100}
           editable={!busy}
         />
+        <CurrencyField
+          label="Vault currency"
+          value={currency}
+          onChange={setCurrency}
+          disabled={busy}
+        />
         <Text style={s.label}>Vault kind</Text>
         <View style={s.row}>
           <Choice
@@ -587,6 +664,30 @@ export default function AccountVaults({
           title={busy ? "Saving vault…" : "Save vault"}
           disabled={busy}
           onPress={() => void saveVault()}
+        />
+      </Sheet>
+      <Sheet
+        visible={editingCurrency}
+        title="Change vault currency"
+        onClose={() => {
+          if (!busy) setEditingCurrency(false);
+        }}
+      >
+        <CurrencyField
+          label="Vault currency"
+          value={currency}
+          onChange={setCurrency}
+          disabled={busy}
+        />
+        {!!draftError && (
+          <Text style={s.error} accessibilityRole="alert">
+            {draftError}
+          </Text>
+        )}
+        <Button
+          title={busy ? "Saving currency…" : "Save currency"}
+          disabled={busy}
+          onPress={() => void saveCurrency()}
         />
       </Sheet>
       <Sheet

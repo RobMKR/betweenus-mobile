@@ -79,14 +79,14 @@ const width = Number(process.env.OFFLINE_TEST_WIDTH || 430);
   await button("Add event expense").click();
   await page.getByLabel("Event title", { exact: true }).fill("Pitch booking");
   await page.getByLabel("Event date", { exact: true }).fill("2026-11-21");
-  await page.getByLabel("Total amount (AED)", { exact: true }).fill("630");
+  await page.getByLabel("Total amount (USD)", { exact: true }).fill("630");
   await page.getByRole("switch", { name: "Partial payments" }).check();
   await button("Next").click();
   await page.getByText("14 participants", { exact: true }).waitFor();
   await button("Next").click();
   await button("Save event").click();
-  await page.getByText("Owed to you · AED 585.00", { exact: true }).waitFor();
-  await page.getByText(/14 equal shares. Your own share AED 45.00/).waitFor();
+  await page.getByText("Owed to you · USD 585.00", { exact: true }).waitFor();
+  await page.getByText(/14 equal shares. Your own share USD 45.00/).waitFor();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   await page.screenshot({
     path: "/tmp/betweenus-tabs-event.png",
@@ -104,22 +104,22 @@ const width = Number(process.env.OFFLINE_TEST_WIDTH || 430);
   await page.getByText("Friday football", { exact: true }).click();
   await page.getByText("Pitch booking", { exact: true }).click();
   await button("Record payment · Player 1").click();
-  await page.getByLabel("Payment amount · AED", { exact: true }).fill("46");
+  await page.getByLabel("Payment amount · USD", { exact: true }).fill("46");
   await button("Save payment").click();
   await page.getByText(/Payment cannot exceed/).waitFor();
-  await page.getByLabel("Payment amount · AED", { exact: true }).fill("20");
+  await page.getByLabel("Payment amount · USD", { exact: true }).fill("20");
   await button("Save payment").click();
-  await page.getByText("Owed to you · AED 565.00", { exact: true }).waitFor();
+  await page.getByText("Owed to you · USD 565.00", { exact: true }).waitFor();
   await button("Record payment · Player 1").click();
-  await button("Use full remaining · AED 25.00").click();
+  await button("Use full remaining · USD 25.00").click();
   await button("Save payment").click();
-  await page.getByText("Owed to you · AED 540.00", { exact: true }).waitFor();
+  await page.getByText("Owed to you · USD 540.00", { exact: true }).waitFor();
   await button("Undo payment").last().click();
-  await page.getByText("Owed to you · AED 565.00", { exact: true }).waitFor();
+  await page.getByText("Owed to you · USD 565.00", { exact: true }).waitFor();
   await button("Record payment · Player 1").click();
-  await button("Use full remaining · AED 25.00").click();
+  await button("Use full remaining · USD 25.00").click();
   await button("Save payment").click();
-  await page.getByText("Owed to you · AED 540.00", { exact: true }).waitFor();
+  await page.getByText("Owed to you · USD 540.00", { exact: true }).waitFor();
   await button("‹ Back to vault").click();
   await button("Archive vault").click();
   await button("Reactivate vault").waitFor();
@@ -127,7 +127,7 @@ const width = Number(process.env.OFFLINE_TEST_WIDTH || 430);
   await tab("Home");
   await page
     .getByLabel("Offline receivable", { exact: true })
-    .filter({ hasText: "AED 540.00" })
+    .filter({ hasText: "USD 540.00" })
     .waitFor();
   await tab("Vaults");
   await button("Archived vaults").click();
@@ -143,33 +143,33 @@ const width = Number(process.env.OFFLINE_TEST_WIDTH || 430);
   await button("Reactivate vault").click();
   await button("Add event expense").click();
   await page.getByLabel("Event title", { exact: true }).fill("Next week");
-  await page.getByLabel("Total amount (AED)", { exact: true }).fill("70");
+  await page.getByLabel("Total amount (USD)", { exact: true }).fill("70");
   await button("Next").click();
   await page.getByText("14 participants", { exact: true }).waitFor();
   for (const checkbox of await page.getByRole("checkbox").all())
     await expect(checkbox).toBeChecked();
   await button("Next").click();
   await button("Save event").click();
-  await page.getByText("Owed to you · AED 65.00", { exact: true }).waitFor();
+  await page.getByText("Owed to you · USD 65.00", { exact: true }).waitFor();
   await button("‹ Back to vault").click();
   await page.getByText("Event expenses · 2", { exact: true }).waitFor();
   await tab("Home");
   await button("+ Add debt").click();
   await button("I borrowed money").click();
   await page.getByLabel("Person's name", { exact: true }).fill("Sam");
-  await page.getByLabel("Amount · AED", { exact: true }).fill("120.50");
+  await page.getByLabel("Amount · USD", { exact: true }).fill("120.50");
   await page
     .getByLabel("Note · optional", { exact: true })
     .fill("A little help");
   await button("Save personal record").click();
   await tab("People");
   await page.getByText("Sam", { exact: true }).click();
-  await page.getByText("You owe · AED 120.50", { exact: true }).waitFor();
+  await page.getByText("You owe · USD 120.50", { exact: true }).waitFor();
   await page.getByText("A little help", { exact: true }).click();
   await button("Record repayment").click();
-  await page.getByLabel("Payment amount · AED", { exact: true }).fill("20.25");
+  await page.getByLabel("Payment amount · USD", { exact: true }).fill("20.25");
   await button("Save payment").click();
-  await page.getByText("AED 100.25", { exact: true }).waitFor();
+  await page.getByText("USD 100.25", { exact: true }).waitFor();
   await tab("Settings");
   await tab("People");
   await expect(button("Record repayment")).toHaveCount(0);
@@ -191,27 +191,27 @@ const width = Number(process.env.OFFLINE_TEST_WIDTH || 430);
   await page
     .getByText(/Not saved:.*Your last saved records are unchanged/)
     .waitFor();
-  await page.getByText("AED 100.25", { exact: true }).waitFor();
+  await page.getByText("USD 100.25", { exact: true }).waitFor();
   await page.evaluate(() => {
     Storage.prototype.setItem = window.__restoreStorageSetItem;
   });
   await button("Undo payment").click();
-  await page.getByText("AED 120.50", { exact: true }).waitFor();
+  await page.getByText("USD 120.50", { exact: true }).waitFor();
   await button("Record repayment").click();
-  await page.getByLabel("Payment amount · AED", { exact: true }).fill("20.25");
+  await page.getByLabel("Payment amount · USD", { exact: true }).fill("20.25");
   await button("Save payment").click();
   await button("‹ Back to person").click();
   await page.getByText("Personal records · 1", { exact: true }).waitFor();
   await button("‹ Back to People").click();
   await button("+ Add debt").click();
   await page.getByLabel("Person's name", { exact: true }).fill(" sam ");
-  await page.getByLabel("Amount · AED", { exact: true }).fill("10");
+  await page.getByLabel("Amount · USD", { exact: true }).fill("10");
   await button("Save personal record").click();
   await expect(page.getByText("sam", { exact: true })).toHaveCount(1);
   await page.getByText("sam", { exact: true }).click();
   await page.getByText("Personal records · 2", { exact: true }).waitFor();
-  await page.getByText("Owed to you · AED 10.00", { exact: true }).waitFor();
-  await page.getByText("You owe · AED 100.25", { exact: true }).waitFor();
+  await page.getByText("Owed to you · USD 10.00", { exact: true }).waitFor();
+  await page.getByText("You owe · USD 100.25", { exact: true }).waitFor();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   await page.screenshot({
     path: "/tmp/betweenus-tabs-people.png",
@@ -220,7 +220,7 @@ const width = Number(process.env.OFFLINE_TEST_WIDTH || 430);
   await tab("Home");
   await page
     .getByLabel("Offline receivable", { exact: true })
-    .filter({ hasText: "AED 615.00" })
+    .filter({ hasText: "USD 615.00" })
     .waitFor();
   for (const width of [320, 430]) {
     await page.setViewportSize({ width, height: 932 });
@@ -245,12 +245,12 @@ const width = Number(process.env.OFFLINE_TEST_WIDTH || 430);
   await button("Use offline — free").click();
   await page
     .getByLabel("Offline receivable", { exact: true })
-    .filter({ hasText: "AED 615.00" })
+    .filter({ hasText: "USD 615.00" })
     .waitFor();
   await page.reload();
   await page
     .getByLabel("Offline receivable", { exact: true })
-    .filter({ hasText: "AED 615.00" })
+    .filter({ hasText: "USD 615.00" })
     .waitFor();
   await tab("People");
   await page.getByText("sam", { exact: true }).click();

@@ -55,10 +55,11 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   };
   const button = (name) => page.getByRole("button", { name, exact: true });
   await page.goto(offlineURL);
-  await page
-    .getByLabel("Offline receivable", { exact: true })
-    .filter({ hasText: "AED 100.00" })
-    .waitFor();
+  await expect(page.getByLabel("Offline receivable")).toHaveText("—");
+  await expect(
+    page.getByText("Incomplete total · Rate needed for AED"),
+  ).toBeVisible();
+  await expect(page.getByText("AED 100.00", { exact: true })).toBeVisible();
   assert.equal(
     await page.evaluate(
       () =>
@@ -107,7 +108,7 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   await expect(page.getByLabel("Person's name", { exact: true })).toHaveValue(
     "Sam",
   );
-  await page.getByLabel("Amount · AED", { exact: true }).fill("10");
+  await page.getByLabel("Amount · USD", { exact: true }).fill("10");
   await page
     .getByLabel("Note · optional", { exact: true })
     .fill("Explicitly linked loan");
@@ -115,17 +116,17 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   await page.getByText("Explicitly linked loan", { exact: true }).click();
   await button("Record repayment").click();
-  await page.getByLabel("Payment amount · AED", { exact: true }).fill("5");
+  await page.getByLabel("Payment amount · USD", { exact: true }).fill("5");
   await button("Save payment").click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   await button("‹ Back to person").click();
-  await page.getByText("Owed to you · AED 5.00", { exact: true }).waitFor();
+  await page.getByText("Owed to you · USD 5.00", { exact: true }).waitFor();
   await button("‹ Back to People").click();
   await button("+ Add person").click();
   await page.getByLabel("Person name", { exact: true }).fill("Sam");
   await button("Save person").click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
-  await page.getByText("Owed to you · AED 0.00", { exact: true }).waitFor();
+  await page.getByText("Owed to you · USD 0.00", { exact: true }).waitFor();
   await tab("People");
   await expect(button("+ Add person")).toBeVisible();
   for (const width of [320, 430]) {
@@ -144,12 +145,12 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
   const disk = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("betweenus.offline-ledger.v1")),
   );
-  assert.equal(disk.version, 3);
+  assert.equal(disk.version, 4);
   assert.equal(disk.people.length, 2);
   assert.notEqual(disk.people[0].id, disk.people[1].id);
   assert.deepEqual(
     disk.records.find((r) => r.id === "old"),
-    legacy.records[0],
+    { ...legacy.records[0], currency: "AED" },
   );
   assert.equal(disk.records.filter((r) => r.personId).length, 1);
   assert.equal(disk.vaults[0].archived, true);
@@ -228,6 +229,8 @@ const offlineURL = process.env.PEOPLE_OFFLINE_URL || "http://localhost:8095",
         email: id === owner ? "alice@example.com" : "bob@example.com",
       });
     if (url.endsWith("/debts")) return json({ debts: [] });
+    if (url.endsWith("/currency-settings"))
+      return json({ mainCurrency: "USD", rates: [] });
     if (url.endsWith("/vault-balances")) return json({ balances: [] });
     if (url.endsWith("/balances")) return json({ balances: [] });
     if (url.endsWith("/people")) {

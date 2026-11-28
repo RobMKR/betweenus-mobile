@@ -23,6 +23,9 @@ const assert = require("node:assert/strict");
   await page
     .getByLabel("Borrower email", { exact: true })
     .fill("john@example.com");
+  await page.getByRole("button", { name: /^Debt currency,/ }).click();
+  await page.getByLabel("Search currencies").fill("AED");
+  await page.getByRole("button", { name: "AED · UAE Dirham" }).click();
   await page.getByLabel("Amount in AED", { exact: true }).fill("500.00");
   await page.getByLabel("Description", { exact: true }).fill(description);
   await page.getByText("Send for confirmation", { exact: true }).click();
@@ -49,6 +52,9 @@ const assert = require("node:assert/strict");
   await page
     .getByLabel("Borrower email", { exact: true })
     .fill("john@example.com");
+  await page.getByRole("button", { name: /^Debt currency,/ }).click();
+  await page.getByLabel("Search currencies").fill("AED");
+  await page.getByRole("button", { name: "AED · UAE Dirham" }).click();
   await page.getByLabel("Amount in AED", { exact: true }).fill("27.50");
   await page
     .getByLabel("Description", { exact: true })

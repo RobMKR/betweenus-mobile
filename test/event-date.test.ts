@@ -91,9 +91,13 @@ test("new dates persist as strings while existing event dates/repayments/archive
     },
   });
   const loaded = await store.load();
-  assert.equal(loaded.version, 3);
+  assert.equal(loaded.version, 4);
   assert.deepEqual(loaded.records, initial.records);
-  assert.deepEqual(loaded.vaults, initial.vaults);
+  assert.deepEqual(loaded.vaults[0], {
+    ...initial.vaults[0],
+    currency: "AED",
+    events: [{ ...old, currency: "AED" }],
+  });
   assert.deepEqual(loaded.people, []);
   const next = createEvent({
     title: "Next match",
@@ -112,7 +116,8 @@ test("new dates persist as strings while existing event dates/repayments/archive
         title: "New",
         kind: "permanent",
         archived: false,
-        events: [next],
+        currency: "AED",
+        events: [{ ...next, currency: "AED" }],
       },
     ],
   }));
@@ -120,7 +125,7 @@ test("new dates persist as strings while existing event dates/repayments/archive
     getItem: async () => disk,
     setItem: async () => {},
   }).load();
-  assert.deepEqual(restored.vaults[0], initial.vaults[0]);
+  assert.deepEqual(restored.vaults[0], loaded.vaults[0]);
   assert.equal(restored.vaults[1].events[0].date, "2028-02-29");
   assert.equal(
     Object.hasOwn(restored.vaults[1], "date"),

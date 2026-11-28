@@ -1,3 +1,4 @@
+import { money, type Currency } from "../currency/model";
 import { palettes } from "../appearance/colors";
 import type { AppColorScheme } from "../appearance/preference";
 import React, { useEffect, useRef, useState } from "react";
@@ -19,6 +20,7 @@ import {
 export type EventWizardProps = {
   visible: boolean;
   vaultTitle: string;
+  currency: Currency;
   rosterIds: string[];
   people: SavedPerson[];
   onClose: () => void;
@@ -30,10 +32,6 @@ export type EventWizardProps = {
 };
 
 const steps = ["Details", "People", "Split and review"] as const;
-
-function amountLabel(minor: number) {
-  return `AED ${(minor / 100).toFixed(2)}`;
-}
 
 function Selection({
   label,
@@ -91,6 +89,7 @@ export default EventWizard;
 
 function WizardSession({
   vaultTitle,
+  currency,
   rosterIds,
   people,
   onClose,
@@ -100,6 +99,7 @@ function WizardSession({
   error = "",
   retrying = false,
 }: EventWizardProps) {
+  const amountLabel = (minor: number) => money(minor, currency);
   const { scheme, c, s } = useUi();
   const styles = stylesByScheme[scheme];
   const [draft, setDraft] = useState<EventDraft>(() => ({
@@ -142,12 +142,13 @@ function WizardSession({
     (draft.payerId !== "self" &&
       (!selected.has(draft.payerId) || !byId.has(draft.payerId)));
 
-  const preview = step === 2 ? previewAllocations(draft, candidates) : null;
+  const preview =
+    step === 2 ? previewAllocations(draft, candidates, currency) : null;
   let submission: EventSubmission | undefined;
   let reviewError = "";
   if (preview) {
     try {
-      submission = buildEventSubmission(draft, candidates);
+      submission = buildEventSubmission(draft, candidates, currency);
     } catch (cause) {
       reviewError = (cause as Error).message;
     }
@@ -171,6 +172,7 @@ function WizardSession({
             amount: draft.amount,
           },
           [],
+          currency,
         );
       } else {
         draftParticipantIds(draft, candidates);
@@ -345,7 +347,7 @@ function WizardSession({
               disabled={locked}
             />
             <Field
-              label="Total amount (AED)"
+              label={`Total amount (${currency})`}
               value={draft.amount}
               onChangeText={(amount) => update({ amount })}
               keyboardType="decimal-pad"
@@ -497,7 +499,7 @@ function WizardSession({
                 : preview.participantIds.map((id) => (
                     <Field
                       key={id}
-                      label={`${personLabel(id)} share (AED)${personDetail(id) ? ` · ${personDetail(id)}` : ""}`}
+                      label={`${personLabel(id)} share (${currency})${personDetail(id) ? ` · ${personDetail(id)}` : ""}`}
                       value={
                         Object.prototype.hasOwnProperty.call(
                           draft.manualAmounts,

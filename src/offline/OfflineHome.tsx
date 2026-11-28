@@ -1,3 +1,14 @@
+import CurrencySettings, { CurrencyField } from "../currency/CurrencySettings";
+import { AmountEstimate, BalanceTotals } from "../currency/Amounts";
+import {
+  amountInput,
+  createValuation,
+  defaultSettings,
+  exponent,
+  LEGACY_CURRENCY,
+  type Currency,
+} from "../currency/model";
+import { recordBalanceRows, setLocalVaultCurrency } from "./model";
 import AppearanceSettings from "../appearance/AppearanceSettings";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -49,7 +60,7 @@ import EventWizard from "../events/EventWizard";
 import { createLocalEvent } from "../events/local";
 import type { EventSubmission } from "../events/draft";
 import { localCalendarDate } from "./eventDate";
-type Form = "record" | "vault" | "roster" | "payment" | null;
+type Form = "record" | "vault" | "roster" | "payment" | "vaultCurrency" | null;
 const today = localCalendarDate;
 export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const { c, s } = useUi();
@@ -58,6 +69,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const active = useRef(true);
   const saving = useRef(false);
   const [ledger, setLedger] = useState<Ledger>(emptyLedger);
+  const currencySettings = ledger.currencySettings ?? defaultSettings();
+  const valuation = useMemo(
+    () => createValuation(currencySettings),
+    [currencySettings],
+  );
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -89,6 +105,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const [form, setForm] = useState<Form>(null);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
+  const [draftCurrency, setDraftCurrency] = useState<Currency>("USD");
   const [date, setDate] = useState(today);
   const [wizardTarget, setWizardTarget] = useState<{
     vaultId: string;
@@ -107,6 +124,9 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
   const record = ledger.records.find((r) => r.id === recordId);
   const vault = ledger.vaults.find((v) => v.id === vaultId);
   const event = vault?.events.find((e) => e.id === eventId);
+  const vaultCurrency = vault?.currency ?? LEGACY_CURRENCY;
+  const recordCurrency = record?.currency ?? LEGACY_CURRENCY;
+  const paymentCurrency = record ? recordCurrency : vaultCurrency;
   const person = event?.participants.find((p) => p.id === personId);
   const savedPeople = ledger.people || [];
   const selectedSavedPerson = savedPeople.find(
@@ -170,6 +190,9 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     setName(forPerson?.name || "");
     setRecordPersonId(forPerson?.id || null);
     setAmount("");
+    setDraftCurrency(
+      next === "vaultCurrency" ? vaultCurrency : currencySettings.mainCurrency,
+    );
     setDate(today());
     setNote("");
     setDirection("lent");
@@ -223,7 +246,6 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     await save(
       (current) => ({
         ...current,
-        version: 3,
         people: [...(current.people || []), person],
       }),
       () => {
@@ -250,7 +272,6 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     await save(
       (current) => ({
         ...current,
-        version: 3,
         people: [...(current.people || []), person],
       }),
       () => {
@@ -271,9 +292,10 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
         );
         if (!container || container.archived)
           throw new Error("Reactivate this vault before adding an event.");
+        if ((container.currency ?? LEGACY_CURRENCY) !== input.currency)
+          throw new Error("Event currency must match the vault currency.");
         return {
           ...current,
-          version: 3,
           vaults: current.vaults.map((item) =>
             item.id === container.id
               ? { ...item, events: [...item.events, next] }
@@ -293,10 +315,14 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     );
     return success;
   }
-  function minor() {
-    const value = amountToMinor(amount);
-    if (value === null)
-      throw new Error("Enter a positive AED amount with up to 2 decimals.");
+  function minor(currency: Currency) {
+    const value = amountToMinor(amount, currency);
+    if (value === null) {
+      const places = exponent(currency);
+      throw new Error(
+        `Enter a positive ${currency} amount with ${places ? `up to ${places} decimal places` : "no decimal places"}.`,
+      );
+    }
     return value;
   }
   async function submit() {
@@ -307,7 +333,8 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
           name: text(name, "Name", 100),
           ...(recordPersonId ? { personId: recordPersonId } : {}),
           direction,
-          amountMinor: minor(),
+          amountMinor: minor(draftCurrency),
+          currency: draftCurrency,
           date: validDate(date),
           note: note.trim(),
           payments: [],
@@ -330,6 +357,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             savedPeople.map((person) => person.id),
           ),
           kind,
+          currency: draftCurrency,
           archived: false,
           events: [],
         };
@@ -345,13 +373,18 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             setArchived(false);
           },
         );
+      } else if (form === "vaultCurrency" && vault) {
+        await save(
+          (current) => setLocalVaultCurrency(current, vault.id, draftCurrency),
+          () => setForm(null),
+        );
       } else if (form === "roster" && vault) {
         await save(
           (current) => setVaultRoster(current, vault.id, memberIds),
           () => setForm(null),
         );
       } else if (form === "payment") {
-        const value = minor();
+        const value = minor(paymentCurrency);
         if (record) {
           await save(
             (current) => ({
@@ -406,7 +439,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
             <View style={s.rowBetween}>
               <Text style={s.label}>
                 {p.amountMinor < 0 ? "Correction" : "Payment recorded"} ·{" "}
-                {money(Math.abs(p.amountMinor))}
+                {money(Math.abs(p.amountMinor), paymentCurrency)}
               </Text>
               {p.amountMinor > 0 &&
                 !payments.some((c) => c.reversesId === p.id) &&
@@ -440,6 +473,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
     ? {
         record: "Add a personal record",
         vault: "Create a vault",
+        vaultCurrency: "Change vault currency",
         roster: "Manage vault members",
         payment: "Record a payment",
       }[form]
@@ -449,6 +483,8 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
         ? "Vault details"
         : "Personal record";
   function recordRow(r: LocalRecord) {
+    const currency = r.currency ?? LEGACY_CURRENCY;
+    const due = remaining(r.amountMinor, r.payments);
     return (
       <Pressable
         accessibilityRole="button"
@@ -463,9 +499,14 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
           <Text numberOfLines={1} style={[s.cardTitle, { flex: 1 }]}>
             {r.name}
           </Text>
-          <Text style={s.label}>
-            {money(remaining(r.amountMinor, r.payments))}
-          </Text>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={s.label}>{money(due, currency)}</Text>
+            <AmountEstimate
+              minor={due}
+              currency={currency}
+              valuation={valuation}
+            />
+          </View>
         </View>
         <Text style={s.small}>
           {r.direction === "lent" ? "Owes you" : "You owe"} · {r.date}
@@ -499,12 +540,14 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
           {v.archived ? " · ARCHIVED" : ""}
         </Text>
         <Text style={s.small}>
-          {v.events.length} events · Owed to you{" "}
+          {v.currency ?? LEGACY_CURRENCY} · {v.events.length} events · Owed to
+          you{" "}
           {money(
             v.events.reduce(
               (sum, e) => sum + eventBalances(e).receivableMinor,
               0,
             ),
+            v.currency ?? LEGACY_CURRENCY,
           )}
         </Text>
       </Pressable>
@@ -564,11 +607,15 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
               REMAINING
             </Text>
             <Text style={s.amount}>
-              {money(remaining(record.amountMinor, record.payments))}
+              {money(
+                remaining(record.amountMinor, record.payments),
+                recordCurrency,
+              )}
             </Text>
             <Text style={s.section}>{record.name}</Text>
             <Text style={s.body}>
-              Original {money(record.amountMinor)} · {record.date}
+              Original {money(record.amountMinor, recordCurrency)} ·{" "}
+              {record.date}
             </Text>
             {!!record.note && <Text style={s.body}>{record.note}</Text>}
             {remaining(record.amountMinor, record.payments) > 0 && (
@@ -604,6 +651,15 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                   setError("");
                   setWizardTarget({ vaultId: vault.id, tab });
                 }}
+              />
+            )}
+            <Text style={s.label}>Vault currency · {vaultCurrency}</Text>
+            {!vault.events.length && !vault.archived && (
+              <Button
+                title="Change vault currency"
+                secondary
+                disabled={busy}
+                onPress={() => openForm("vaultCurrency")}
               />
             )}
             <Text style={s.section}>
@@ -659,12 +715,13 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
               >
                 <Text style={s.cardTitle}>{e.title}</Text>
                 <Text style={s.small}>
-                  {e.date} · {money(e.totalMinor)} · {e.participants.length}{" "}
-                  people
+                  {e.date} · {money(e.totalMinor, vaultCurrency)} ·{" "}
+                  {e.participants.length} people
                 </Text>
                 <Text style={s.label}>
-                  Owed to you {money(eventBalances(e).receivableMinor)} · You
-                  owe {money(eventBalances(e).payableMinor)}
+                  Owed to you{" "}
+                  {money(eventBalances(e).receivableMinor, vaultCurrency)} · You
+                  owe {money(eventBalances(e).payableMinor, vaultCurrency)}
                 </Text>
               </Pressable>
             ))}
@@ -707,13 +764,17 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 ? "You"
                 : event.participants.find((p) => p.id === event.payerId)?.name}
             </Text>
-            <Text style={s.amount}>{money(event.totalMinor)}</Text>
+            <Text style={s.amount}>
+              {money(event.totalMinor, vaultCurrency)}
+            </Text>
             <View style={[s.card, { backgroundColor: c.pale }]}>
               <Text style={s.label}>
-                Owed to you · {money(eventBalances(event).receivableMinor)}
+                Owed to you ·{" "}
+                {money(eventBalances(event).receivableMinor, vaultCurrency)}
               </Text>
               <Text style={s.label}>
-                You owe · {money(eventBalances(event).payableMinor)}
+                You owe ·{" "}
+                {money(eventBalances(event).payableMinor, vaultCurrency)}
               </Text>
               <Text style={s.small}>
                 {event.participants.length}{" "}
@@ -723,6 +784,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                   eventShares(event)[
                     event.participants.find((p) => p.isSelf)?.id || ""
                   ] || 0,
+                  vaultCurrency,
                 )}{" "}
                 is never added to what others owe you.
               </Text>
@@ -743,11 +805,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                   <Text style={s.label}>
                     {p.id === event.payerId
                       ? "Payer"
-                      : money(eventRemaining(event, p.id))}
+                      : money(eventRemaining(event, p.id), vaultCurrency)}
                   </Text>
                 </View>
                 <Text style={s.small}>
-                  Share {money(eventShares(event)[p.id])}
+                  Share {money(eventShares(event)[p.id], vaultCurrency)}
                   {p.id !== event.payerId
                     ? ` · ${eventRemaining(event, p.id) === 0 ? "Paid in full" : "remaining to payer"}`
                     : " · Paid the original expense"}
@@ -796,6 +858,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
         {!hasDetails && tab === "home" && (
           <OfflineOverview
             ledger={ledger}
+            valuation={valuation}
             ready={ready}
             busy={busy}
             onAddDebt={() => openForm("record")}
@@ -815,12 +878,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 onDebt={() => openForm("record", selectedSavedPerson)}
               >
                 <View style={[s.card, { backgroundColor: c.pale }]}>
-                  <Text style={s.label}>
-                    Owed to you · {money(linked.receivableMinor)}
-                  </Text>
-                  <Text style={s.label}>
-                    You owe · {money(linked.payableMinor)}
-                  </Text>
+                  <BalanceTotals
+                    totals={valuation.balances(
+                      recordBalanceRows(linked.records),
+                    )}
+                  />
                 </View>
                 <Text style={s.section}>Personal records</Text>
                 {linked.records.map(recordRow)}
@@ -832,12 +894,11 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 </Pressable>
                 <Text style={s.title}>{selectedPerson.name}</Text>
                 <View style={[s.card, { backgroundColor: c.pale }]}>
-                  <Text style={s.label}>
-                    Owed to you · {money(selectedPerson.receivableMinor)}
-                  </Text>
-                  <Text style={s.label}>
-                    You owe · {money(selectedPerson.payableMinor)}
-                  </Text>
+                  <BalanceTotals
+                    totals={valuation.balances(
+                      recordBalanceRows(selectedPerson.records),
+                    )}
+                  />
                 </View>
                 <Text style={s.small}>
                   Local name grouping only, not a verified identity.
@@ -908,11 +969,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                         color={c.muted}
                       />
                     </View>
-                    <Text style={s.small}>
-                      {p.records.length} records · Owed to you{" "}
-                      {money(p.receivableMinor)} · You owe{" "}
-                      {money(p.payableMinor)}
-                    </Text>
+                    <Text style={s.small}>{p.records.length} records</Text>
                   </Pressable>
                 ))}
                 {!people.length && (
@@ -985,6 +1042,29 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
           <>
             <Text style={s.title}>Settings</Text>
             <AppearanceSettings />
+            <CurrencySettings
+              settings={currencySettings}
+              unavailable={
+                ready
+                  ? undefined
+                  : "Open local records before changing currency settings."
+              }
+              save={async (next) => {
+                if (busy || saving.current)
+                  throw new Error("A local write is in progress. Retry.");
+                let saved = false;
+                await save(
+                  (current) => ({ ...current, currencySettings: next }),
+                  () => {
+                    saved = true;
+                  },
+                );
+                if (!saved)
+                  throw new Error(
+                    "Currency settings could not be saved. Retry after checking device storage.",
+                  );
+              }}
+            />
             <View style={s.card}>
               <Text style={s.tag}>OFFLINE · FREE · DEVICE ONLY</Text>
               <Text style={s.cardTitle}>A private record on this device</Text>
@@ -1024,6 +1104,7 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
         <EventWizard
           visible={!!wizardTarget}
           vaultTitle={wizardVault.title}
+          currency={wizardVault.currency ?? LEGACY_CURRENCY}
           rosterIds={wizardVault.memberIds || []}
           people={savedPeople}
           onClose={() => {
@@ -1079,8 +1160,14 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
               maxLength={100}
               editable={!recordPersonId}
             />
+            <CurrencyField
+              label="Debt currency"
+              value={draftCurrency}
+              onChange={setDraftCurrency}
+              disabled={busy}
+            />
             <Field
-              label="Amount · AED"
+              label={`Amount · ${draftCurrency}`}
               value={amount}
               onChangeText={setAmount}
               keyboardType="decimal-pad"
@@ -1109,6 +1196,12 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
               placeholder="Friday football, Summer trip…"
               maxLength={100}
             />
+            <CurrencyField
+              label="Vault currency"
+              value={draftCurrency}
+              onChange={setDraftCurrency}
+              disabled={busy}
+            />
             <View style={s.row}>
               <Choice
                 title="Temporary"
@@ -1127,6 +1220,14 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 : "For a trip, match, or short-lived plan. Add one or more events, then archive when you are done. Nothing is automatically deleted."}
             </Text>
           </>
+        )}
+        {form === "vaultCurrency" && (
+          <CurrencyField
+            label="Vault currency"
+            value={draftCurrency}
+            onChange={setDraftCurrency}
+            disabled={busy}
+          />
         )}
         {(form === "vault" || form === "roster") && (
           <>
@@ -1157,20 +1258,22 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 : `${person?.name}${person?.isSelf ? " (you)" : ""} paid ${event?.payerId === "self" && event.splitMode ? "You" : event?.participants.find((p) => p.id === event.payerId)?.name}`}
             </Text>
             <Text style={s.body}>
-              Remaining {money(paymentDue)}. This records money paid outside the
-              app; it does not move money or notify anyone.
+              Remaining {money(paymentDue, paymentCurrency)}. This records money
+              paid outside the app; it does not move money or notify anyone.
             </Text>
             <Field
-              label="Payment amount · AED"
+              label={`Payment amount · ${paymentCurrency}`}
               value={amount}
               onChangeText={setAmount}
               keyboardType="decimal-pad"
             />
             <Button
-              title={`Use full remaining · ${money(paymentDue)}`}
+              title={`Use full remaining · ${money(paymentDue, paymentCurrency)}`}
               secondary
               disabled={busy}
-              onPress={() => setAmount((paymentDue / 100).toFixed(2))}
+              onPress={() =>
+                setAmount(amountInput(paymentDue, paymentCurrency))
+              }
             />
           </>
         )}
@@ -1181,11 +1284,13 @@ export default function OfflineHome({ onExit }: { onExit: () => void }) {
                 ? "Saving…"
                 : form === "payment"
                   ? "Save payment"
-                  : form === "roster"
-                    ? "Save members"
-                    : form === "vault"
-                      ? "Save vault"
-                      : "Save personal record"
+                  : form === "vaultCurrency"
+                    ? "Save currency"
+                    : form === "roster"
+                      ? "Save members"
+                      : form === "vault"
+                        ? "Save vault"
+                        : "Save personal record"
             }
             disabled={busy}
             onPress={() => void submit()}

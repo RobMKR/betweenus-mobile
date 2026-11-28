@@ -1,3 +1,4 @@
+import type { Currency } from "../currency/model";
 import type { EventSubmission } from "./draft";
 
 export type EventParticipant = {
@@ -19,7 +20,7 @@ export type AccountEvent = {
   vaultId: string;
   title: string;
   date: string;
-  currency: "AED";
+  currency: Currency;
   totalMinor: number;
   payerId: string;
   splitMode: "equal" | "manual";
@@ -29,7 +30,7 @@ export type AccountEvent = {
   createdAt: string;
   updatedAt: string;
   balance: {
-    currency: string;
+    currency: Currency;
     receivableMinor: number;
     payableMinor: number;
     netMinor: number;
@@ -74,6 +75,7 @@ export type AccountMoneyIntent = { clientRequestId: string } & (
       kind: "payment";
       eventId: string;
       eventTitle: string;
+      currency?: Currency;
       participantName: string;
       body: { participantId: string; amountMinor: number };
     }

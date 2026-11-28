@@ -1,3 +1,4 @@
+import { defaultSettings, isCurrency } from "../currency/model";
 import type { SavedPerson } from "../people/model";
 import { id, validateLedger, type Event, type Ledger } from "../offline/model";
 import type { EventSubmission } from "./draft";
@@ -8,7 +9,7 @@ export function createLocalEvent(
   people: SavedPerson[],
 ): Event {
   if (
-    input.currency !== "AED" ||
+    !isCurrency(input.currency) ||
     !["equal", "manual"].includes(input.splitMode) ||
     input.title.trim().length > 100 ||
     input.title.includes("\0") ||
@@ -56,6 +57,7 @@ export function createLocalEvent(
     title: input.title,
     date: input.date,
     totalMinor: input.totalMinor,
+    currency: input.currency,
     payerId: input.payerId,
     splitMode: input.splitMode,
     partialPayments: input.partialPayments,
@@ -64,7 +66,8 @@ export function createLocalEvent(
     payments: {},
   };
   validateLedger({
-    version: 3,
+    version: 4,
+    currencySettings: defaultSettings(),
     people,
     records: [],
     vaults: [
@@ -73,6 +76,7 @@ export function createLocalEvent(
         title: "Event",
         kind: "temporary",
         archived: false,
+        currency: input.currency,
         events: [event],
       },
     ],

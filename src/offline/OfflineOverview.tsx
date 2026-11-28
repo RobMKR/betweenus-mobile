@@ -1,11 +1,13 @@
 import React from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import type { Ledger, LocalRecord, Vault } from "./model";
-import { totals } from "./model";
-import { money } from "../api";
+import { recordBalanceRows, vaultBalanceRows } from "./model";
+import type { createValuation } from "../currency/model";
+import { incompleteLabel, totalAmount } from "../currency/Amounts";
 import { Button, useUi } from "./ui";
 export default function OfflineOverview({
   ledger,
+  valuation,
   ready,
   busy,
   onAddDebt,
@@ -16,6 +18,7 @@ export default function OfflineOverview({
   vaultRow,
 }: {
   ledger: Ledger;
+  valuation: ReturnType<typeof createValuation>;
   ready: boolean;
   busy: boolean;
   onAddDebt: () => void;
@@ -26,7 +29,10 @@ export default function OfflineOverview({
   vaultRow: (v: Vault) => React.ReactNode;
 }) {
   const { c, s } = useUi();
-  const balance = totals(ledger);
+  const balance = valuation.balances([
+    ...recordBalanceRows(ledger.records),
+    ...vaultBalanceRows(ledger.vaults),
+  ]);
   const narrow = useWindowDimensions().width < 360;
   return (
     <>
@@ -65,7 +71,7 @@ export default function OfflineOverview({
               accessibilityLabel="Offline receivable"
               style={{ fontSize: 24, fontWeight: "600", color: c.onBalance }}
             >
-              {ready ? money(balance.receivableMinor) : "—"}
+              {ready ? totalAmount(balance, "receivableMinor") : "—"}
             </Text>
           </View>
           <View style={{ gap: 8, flex: 1 }}>
@@ -75,13 +81,14 @@ export default function OfflineOverview({
             <Text
               style={{ fontSize: 24, fontWeight: "600", color: c.onBalance }}
             >
-              {ready ? money(balance.payableMinor) : "—"}
+              {ready ? totalAmount(balance, "payableMinor") : "—"}
             </Text>
           </View>
         </View>
         <Text style={{ fontSize: 11, lineHeight: 17, color: c.onBalanceMuted }}>
-          Includes archived vaults. Your own notes, not confirmations from
-          others.
+          {ready && balance.missingCurrencies.length > 0
+            ? incompleteLabel(balance.missingCurrencies)
+            : "Estimated using saved rates · Includes archived vaults"}
         </Text>
       </View>
       <View style={s.row}>

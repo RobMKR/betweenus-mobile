@@ -190,7 +190,8 @@ test("durable store roundtrips vaults and serializes rapid writes", async () => 
     title: "Football",
     kind: "permanent" as const,
     archived: false,
-    events: [football()],
+    currency: "AED" as const,
+    events: [{ ...football(), currency: "AED" as const }],
   };
   await Promise.all([
     store.commit((current) => ({ ...current, vaults: [vault] })),
@@ -198,7 +199,7 @@ test("durable store roundtrips vaults and serializes rapid writes", async () => 
       ...current,
       vaults: current.vaults.map((v) => ({
         ...v,
-        events: [...v.events, football()],
+        events: [...v.events, { ...football(), currency: "AED" }],
       })),
     })),
   ]);
@@ -225,6 +226,7 @@ test("failed persistence does not publish unsaved data; queue can retry", async 
         title: "Trip",
         kind: "temporary",
         archived: false,
+        currency: "AED",
         events: [],
       },
     ],
@@ -256,7 +258,8 @@ test("loads and writes issued together run in call order", async () => {
         title: "Football",
         kind: "permanent",
         archived: false,
-        events: [football()],
+        currency: "AED" as const,
+        events: [{ ...football(), currency: "AED" as const }],
       },
     ],
   }));
